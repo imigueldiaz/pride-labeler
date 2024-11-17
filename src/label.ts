@@ -69,15 +69,7 @@ function addOrUpdateLabel(did: string, rkey: string, labels: Set<string>) {
   }
   logger.info(`New label: ${newLabel.identifier}`);
 
-  if (labels.size >= LABEL_LIMIT) {
-    try {
-      labelerServer.createLabels({ uri: did }, { negate: Array.from(labels) });
-      logger.info(`Successfully negated existing labels: ${Array.from(labels).join(', ')}`);
-    } catch (error) {
-      logger.error(`Error negating existing labels: ${error}`);
-    }
-  }
-
+  // Since LABEL_LIMIT is 0 (no limit), we don't need to check or remove existing labels
   try {
     labelerServer.createLabel({ uri: did, val: newLabel.identifier });
     logger.info(`Successfully labeled ${did} with ${newLabel.identifier}`);
