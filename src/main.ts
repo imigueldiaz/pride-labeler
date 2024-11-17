@@ -66,11 +66,12 @@ jetstream.onCreate(WANTED_COLLECTION, (event: CommitCreateEvent<typeof WANTED_CO
 
 const metricsServer = startMetricsServer(METRICS_PORT);
 
-labelerServer.start(PORT, (error, address) => {
-  if (error) {
-    logger.error('Error starting server: %s', error);
+// Iniciar el servidor
+labelerServer.start(PORT, (err) => {
+  if (err) {
+    logger.error('Error starting server: %s', err);
   } else {
-    logger.info(`Labeler server listening on ${address}`);
+    logger.info(`Labeler server listening on port ${PORT}`);
   }
 });
 

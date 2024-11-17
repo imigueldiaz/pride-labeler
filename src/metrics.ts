@@ -1,28 +1,26 @@
 import express from 'express';
-import { Registry, collectDefaultMetrics } from 'prom-client';
+import client from 'prom-client';
 
 import logger from './logger.js';
 
-const register = new Registry();
-collectDefaultMetrics({ register });
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
 
-const app = express();
+export function startMetricsServer(port: number) {
+  const app = express();
 
-app.get('/metrics', (req, res) => {
-  register
-    .metrics()
-    .then((metrics) => {
+  app.get('/metrics', async (req, res) => {
+    try {
       res.set('Content-Type', register.contentType);
-      res.send(metrics);
-    })
-    .catch((ex: unknown) => {
-      logger.error(`Error serving metrics: ${(ex as Error).message}`);
-      res.status(500).end((ex as Error).message);
-    });
-});
-
-export const startMetricsServer = (port: number, host = '127.0.0.1') => {
-  return app.listen(port, host, () => {
-    logger.info(`Metrics server is listening on ${host}:${port}`);
+      res.end(await register.metrics());
+    } catch (error) {
+      res.status(500).end(error);
+    }
   });
-};
+
+  const server = app.listen(port, '0.0.0.0', () => {
+    logger.info(`Metrics server is listening on 0.0.0.0:${port}`);
+  });
+
+  return server;
+}
