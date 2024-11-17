@@ -56,7 +56,9 @@ function deleteAllLabels(did: string, labels: Set<string>) {
   logger.info(`Deleting labels: ${labelsToDelete.join(', ')}`);
 
   for (const label of labelsToDelete) {
-    labelerServer.db.prepare('INSERT INTO labels (uri, val, neg, cts) VALUES (?, ?, true, ?)').run(did, label, Date.now());
+    labelerServer.db
+      .prepare('INSERT INTO labels (uri, val, neg, cts, src) VALUES (?, ?, true, ?, ?)')
+      .run(did, label, Date.now(), DID);
   }
 }
 
@@ -76,14 +78,14 @@ function addOrUpdateLabel(did: string, rkey: string, currentLabels: Set<string>)
     logger.info(`Successfully negated existing labels: ${labelsToNegate.join(', ')}`);
     for (const labelToNegate of labelsToNegate) {
       labelerServer.db
-        .prepare('INSERT INTO labels (uri, val, neg, cts) VALUES (?, ?, true, ?)')
-        .run(did, labelToNegate, Date.now());
+        .prepare('INSERT INTO labels (uri, val, neg, cts, src) VALUES (?, ?, true, ?, ?)')
+        .run(did, labelToNegate, Date.now(), DID);
     }
   }
 
   labelerServer.db
-    .prepare('INSERT INTO labels (uri, val, neg, cts) VALUES (?, ?, false, ?)')
-    .run(did, newLabel, Date.now());
+    .prepare('INSERT INTO labels (uri, val, neg, cts, src) VALUES (?, ?, false, ?, ?)')
+    .run(did, newLabel, Date.now(), DID);
 
   logger.info(`Successfully labeled ${did} with ${newLabel}`);
 }
