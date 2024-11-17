@@ -29,14 +29,18 @@ export const label = (did: string, rkey: string) => {
 
 function fetchCurrentLabels(did: string) {
   const query = labelerServer.db
-    .prepare<string[]>(`SELECT * FROM labels WHERE uri = ?`)
+    .prepare<string[]>(`SELECT * FROM labels WHERE uri = ? ORDER BY cts DESC`)
     .all(did) as ComAtprotoLabelDefs.Label[];
 
-  const labels = query.reduce((set, label) => {
-    if (!label.neg) set.add(label.val);
-    else set.delete(label.val);
-    return set;
-  }, new Set<string>());
+  const labels = new Set<string>();
+  // Process labels in chronological order, newer entries take precedence
+  for (const label of query) {
+    if (!label.neg) {
+      labels.add(label.val);
+    } else {
+      labels.delete(label.val);
+    }
+  }
 
   if (labels.size > 0) {
     logger.info(`Current labels: ${Array.from(labels).join(', ')}`);
@@ -69,7 +73,13 @@ function addOrUpdateLabel(did: string, rkey: string, labels: Set<string>) {
   }
   logger.info(`New label: ${newLabel.identifier}`);
 
-  // Since LABEL_LIMIT is 0 (no limit), we don't need to check or remove existing labels
+  // Check if the label already exists
+  if (labels.has(newLabel.identifier)) {
+    logger.info(`Label ${newLabel.identifier} already exists for ${did}`);
+    return;
+  }
+
+  // Add the new label without affecting existing ones
   try {
     labelerServer.createLabel({ uri: did, val: newLabel.identifier });
     logger.info(`Successfully labeled ${did} with ${newLabel.identifier}`);
