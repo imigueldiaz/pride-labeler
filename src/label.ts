@@ -37,8 +37,10 @@ function fetchCurrentLabels(did: string) {
   for (const label of query) {
     if (!label.neg) {
       labels.add(label.val);
+      logger.info(`Added label: ${label.val}`);
     } else {
       labels.delete(label.val);
+      logger.info(`Deleted label: ${label.val}`); 
     }
   }
 

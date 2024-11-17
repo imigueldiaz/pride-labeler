@@ -41,7 +41,6 @@ jetstream.on('open', () => {
   );
   cursorUpdateInterval = setInterval(() => {
     if (jetstream.cursor) {
-      logger.info(`Cursor updated to: ${jetstream.cursor} (${epochUsToDateTime(jetstream.cursor)})`);
       fs.writeFile('cursor.txt', jetstream.cursor.toString(), (err) => {
         if (err) logger.error(err);
       });
