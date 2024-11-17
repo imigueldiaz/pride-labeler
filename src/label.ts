@@ -81,11 +81,21 @@ function addOrUpdateLabel(did: string, rkey: string, labels: Set<string>) {
     return;
   }
 
-  // Add the new label without affecting existing ones
+  // Add the new label along with existing ones
   try {
-    labelerServer.createLabel({ uri: did, val: newLabel.identifier });
-    logger.info(`Successfully labeled ${did} with ${newLabel.identifier}`);
+    // Get all current labels plus the new one
+    const allLabels = new Set(labels);
+    allLabels.add(newLabel.identifier);
+    
+    // First negate all existing labels
+    if (labels.size > 0) {
+      labelerServer.createLabels({ uri: did }, { negate: Array.from(labels) });
+    }
+    
+    // Then create all labels at once
+    labelerServer.createLabels({ uri: did }, { create: Array.from(allLabels) });
+    logger.info(`Successfully labeled ${did} with all labels: ${Array.from(allLabels).join(', ')}`);
   } catch (error) {
-    logger.error(`Error adding new label: ${error}`);
+    logger.error(`Error adding labels: ${error}`);
   }
 }
