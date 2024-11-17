@@ -8,6 +8,7 @@ client.collectDefaultMetrics({ register });
 
 export function startMetricsServer(port: number) {
   const app = express();
+  const host = '0.0.0.0';
 
   app.get('/metrics', async (req, res) => {
     try {
@@ -18,8 +19,8 @@ export function startMetricsServer(port: number) {
     }
   });
 
-  const server = app.listen(port, '0.0.0.0', () => {
-    logger.info(`Metrics server is listening on 0.0.0.0:${port}`);
+  const server = app.listen(port, host, () => {
+    logger.info(`Metrics server is listening on ${host}:${port}`);
   });
 
   return server;

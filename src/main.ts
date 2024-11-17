@@ -66,12 +66,15 @@ jetstream.onCreate(WANTED_COLLECTION, (event: CommitCreateEvent<typeof WANTED_CO
 
 const metricsServer = startMetricsServer(METRICS_PORT);
 
-// Iniciar el servidor
-labelerServer.start(PORT, (err) => {
+// Configurar el servidor para Railway
+const port = process.env.PORT ? parseInt(process.env.PORT) : PORT;
+
+// Usar solo el puerto ya que es lo único que acepta la API
+labelerServer.start(port, (err) => {
   if (err) {
     logger.error('Error starting server: %s', err);
   } else {
-    logger.info(`Labeler server listening on port ${PORT}`);
+    logger.info(`Labeler server listening on port ${port}`);
   }
 });
 
