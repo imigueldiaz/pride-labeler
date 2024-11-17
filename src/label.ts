@@ -49,39 +49,41 @@ function deleteAllLabels(did: string, labels: Set<string>) {
   const labelsToDelete: string[] = Array.from(labels);
 
   if (labelsToDelete.length === 0) {
-    logger.info(`No labels to delete`);
-  } else {
-    logger.info(`Labels to delete: ${labelsToDelete.join(', ')}`);
-    try {
-      labelerServer.createLabels({ uri: did }, { negate: labelsToDelete });
-      logger.info('Successfully deleted all labels');
-    } catch (error) {
-      logger.error(`Error deleting all labels: ${error}`);
-    }
+    logger.info('No labels to delete.');
+    return;
+  }
+
+  logger.info(`Deleting labels: ${labelsToDelete.join(', ')}`);
+
+  for (const label of labelsToDelete) {
+    labelerServer.db.prepare('INSERT INTO labels (uri, val, neg, cts) VALUES (?, ?, true, ?)').run(did, label, Date.now());
   }
 }
 
-function addOrUpdateLabel(did: string, rkey: string, labels: Set<string>) {
-  const newLabel = LABELS.find((label) => label.rkey === rkey);
-  if (!newLabel) {
-    logger.warn(`New label not found: ${rkey}. Likely liked a post that's not one for labels.`);
+function addOrUpdateLabel(did: string, rkey: string, currentLabels: Set<string>) {
+  const label = LABELS.find((l) => l.rkey === rkey);
+  if (!label) {
+    logger.error(`Label with rkey ${rkey} not found`);
     return;
   }
-  logger.info(`New label: ${newLabel.identifier}`);
 
-  if (labels.size >= LABEL_LIMIT) {
-    try {
-      labelerServer.createLabels({ uri: did }, { negate: Array.from(labels) });
-      logger.info(`Successfully negated existing labels: ${Array.from(labels).join(', ')}`);
-    } catch (error) {
-      logger.error(`Error negating existing labels: ${error}`);
+  const newLabel = label.identifier;
+  logger.info(`New label: ${newLabel}`);
+
+  // No necesitamos negar las etiquetas existentes si LABEL_LIMIT es 0
+  if (LABEL_LIMIT > 0 && currentLabels.size >= LABEL_LIMIT) {
+    const labelsToNegate = Array.from(currentLabels);
+    logger.info(`Successfully negated existing labels: ${labelsToNegate.join(', ')}`);
+    for (const labelToNegate of labelsToNegate) {
+      labelerServer.db
+        .prepare('INSERT INTO labels (uri, val, neg, cts) VALUES (?, ?, true, ?)')
+        .run(did, labelToNegate, Date.now());
     }
   }
 
-  try {
-    labelerServer.createLabel({ uri: did, val: newLabel.identifier });
-    logger.info(`Successfully labeled ${did} with ${newLabel.identifier}`);
-  } catch (error) {
-    logger.error(`Error adding new label: ${error}`);
-  }
+  labelerServer.db
+    .prepare('INSERT INTO labels (uri, val, neg, cts) VALUES (?, ?, false, ?)')
+    .run(did, newLabel, Date.now());
+
+  logger.info(`Successfully labeled ${did} with ${newLabel}`);
 }
