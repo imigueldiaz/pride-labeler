@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "npx tsx src/main.ts",
+    "start": "node dist/main.js",
     "dev": "npx tsx --watch src/main.ts",
     "format": "bunx prettier --write .",
     "lint": "bunx eslint .",

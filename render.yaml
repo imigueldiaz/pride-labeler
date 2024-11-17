@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: pride-labeler
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: HOST
+        value: 0.0.0.0
+      - key: DID
+        sync: false
+      - key: SIGNING_KEY
+        sync: false
+      - key: BSKY_IDENTIFIER
+        sync: false
+      - key: BSKY_PASSWORD
+        sync: false
