@@ -6,6 +6,11 @@
     "moduleResolution": "NodeNext",
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
-    "types": ["node"]
-  }
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "types": ["node"],
+    "noImplicitAny": false
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
 }
