@@ -66,28 +66,12 @@ jetstream.onCreate(WANTED_COLLECTION, (event: CommitCreateEvent<typeof WANTED_CO
 
 const metricsServer = startMetricsServer(METRICS_PORT);
 
-// Configurar el servidor para Railway
-const port = process.env.PORT ? parseInt(process.env.PORT) : PORT;
-
-// Verificar que podemos acceder a la base de datos
-try {
-  const labels = labelerServer.db
-    .prepare('SELECT COUNT(*) as count FROM labels')
-    .get() as { count: number };
-  logger.info(`Database connected successfully. Total labels: ${labels.count}`);
-} catch (error) {
-  logger.error('Error accessing database:', error);
-  process.exit(1);
-}
-
-// Iniciar el servidor
-labelerServer.start(port, (err) => {
-  if (err) {
-    logger.error('Error starting server: %s', err);
-    process.exit(1);
+labelerServer.start(PORT, (error, address) => {
+  if (error) {
+    logger.error('Error starting server: %s', error);
+  } else {
+    logger.info(`Labeler server listening on ${address}`);
   }
-  logger.info(`Labeler server started on port ${port}`);
-  logger.info('Query labels endpoint available at /xrpc/com.atproto.label.queryLabels');
 });
 
 jetstream.start();

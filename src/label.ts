@@ -95,6 +95,13 @@ function addOrUpdateLabel(did: string, rkey: string, currentLabels: Set<string>)
   }
 
   const newLabel = label.identifier;
+  
+  // Verificar si la etiqueta ya existe
+  if (currentLabels.has(newLabel)) {
+    logger.info(`Label ${newLabel} already exists for ${did}, skipping`);
+    return;
+  }
+
   logger.info(`Adding new label for ${did}: ${newLabel}`);
 
   // No necesitamos negar las etiquetas existentes si LABEL_LIMIT es 0
