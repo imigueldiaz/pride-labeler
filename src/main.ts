@@ -68,11 +68,14 @@ const metricsServer = startMetricsServer(METRICS_PORT);
 
 // Configurar el servidor para Railway
 const port = process.env.PORT ? parseInt(process.env.PORT) : PORT;
+logger.info(`Using port: ${port}`);
 
 // Usar solo el puerto ya que es lo único que acepta la API
 labelerServer.start(port, (err) => {
   if (err) {
     logger.error('Error starting server: %s', err);
+    // Si hay un error al iniciar el servidor, terminamos el proceso
+    process.exit(1);
   } else {
     logger.info(`Labeler server listening on port ${port}`);
   }
