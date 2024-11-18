@@ -288,4 +288,56 @@ export class LabelService {
             throw error;
         }
     }
+
+    async getLabelStatus(uri: string, label: string): Promise<'positive' | 'negative' | 'none'> {
+        try {
+            logger.info(`Getting status for label ${label} on URI: ${uri}`);
+            const db = await this.getDatabase();
+            const collection = db.collection('labels');
+
+            // Buscar la etiqueta (tanto positiva como negativa)
+            const positiveLabel = await collection.findOne({ uri, val: label, neg: false });
+            const negativeLabel = await collection.findOne({ uri, val: label, neg: true });
+
+            if (positiveLabel) {
+                logger.info(`Found positive label ${label} for ${uri}`);
+                return 'positive';
+            } else if (negativeLabel) {
+                logger.info(`Found negative label ${label} for ${uri}`);
+                return 'negative';
+            } else {
+                logger.info(`No label ${label} found for ${uri}`);
+                return 'none';
+            }
+        } catch (error) {
+            logger.error('Error getting label status:', error instanceof Error ? error.stack : error);
+            throw error;
+        }
+    }
+
+    async updateLabelTimestamp(uri: string, label: string): Promise<void> {
+        try {
+            logger.info(`Updating timestamp for label ${label} on URI: ${uri}`);
+            const db = await this.getDatabase();
+            const collection = db.collection('labels');
+
+            const result = await collection.updateOne(
+                { uri, val: label, neg: false },
+                { $set: { cts: new Date() } }
+            );
+
+            logger.info(
+                `Update timestamp result: ` +
+                `matched=${result.matchedCount}, ` +
+                `modified=${result.modifiedCount}`
+            );
+
+            if (result.matchedCount === 0) {
+                logger.warn(`No matching label found for ${label} on ${uri}`);
+            }
+        } catch (error) {
+            logger.error('Error updating label timestamp:', error instanceof Error ? error.stack : error);
+            throw error;
+        }
+    }
 }

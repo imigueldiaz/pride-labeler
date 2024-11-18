@@ -120,6 +120,20 @@ export class MongoDBLabelerServer extends LabelerServer {
         }
         logger.info(`New label: ${newLabel.identifier}`);
 
+        // Verificar si la etiqueta ya existe (positiva o negativa)
+        const labelStatus = await this.labelService.getLabelStatus(uri, newLabel.identifier);
+        
+        if (labelStatus === 'positive') {
+            logger.info(`Positive label ${newLabel.identifier} already exists for ${uri}, updating timestamp...`);
+            await this.labelService.updateLabelTimestamp(uri, newLabel.identifier);
+            return;
+        } else if (labelStatus === 'negative') {
+            logger.info(`Found negative label ${newLabel.identifier} for ${uri}, creating positive label...`);
+            // Si existe una versión negada, creamos la versión positiva
+            await this.labelService.createLabelDocuments(uri, [newLabel.identifier], false);
+            return;
+        }
+
         // Si hay límite de etiquetas y se excede, negar las existentes
         if (LABEL_LIMIT > 0 && currentLabels.size >= LABEL_LIMIT) {
             await this.labelService.createNegationDocuments(uri, currentLabels);
