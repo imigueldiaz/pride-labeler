@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 const labelSchema = new mongoose.Schema({
-    id: Number,
+    id: { type: Number, required: true, unique: true },
     src: String,
     uri: { type: String, required: true },
     val: { type: String, required: true },
@@ -11,5 +11,10 @@ const labelSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Crear índice único para evitar duplicados
+labelSchema.index({ uri: 1, val: 1, neg: 1 }, { unique: true });
+// Crear índice único para IDs
+labelSchema.index({ id: 1 }, { unique: true });
 
 export const Label = mongoose.model('Label', labelSchema);

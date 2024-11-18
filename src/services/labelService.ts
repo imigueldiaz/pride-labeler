@@ -20,7 +20,7 @@ interface MongoLabel extends ATLabel {
 }
 
 // Contador para IDs secuenciales
-interface Counter {
+interface Counter extends Document {
     _id: string;
     seq: number;
 }
@@ -43,26 +43,40 @@ export class LabelService {
     private async getNextId(db: mongoose.mongo.Db): Promise<number> {
         const countersCollection = db.collection<Counter>('counters');
         
-        // Primero intentamos obtener el contador actual
-        const current = await countersCollection.findOne({ _id: 'labelId' as any });
-        
-        if (current) {
-            // Si existe, incrementamos y devolvemos
-            const result = await countersCollection.findOneAndUpdate(
-                { _id: 'labelId' as any },
-                { $inc: { seq: 1 } },
-                { returnDocument: 'after' }
-            );
-            return result?.seq || current.seq + 1;
+        while (true) {
+            try {
+                // Intentar obtener y actualizar el contador atómicamente
+                const result = await countersCollection.findOneAndUpdate(
+                    { _id: 'labelId' },
+                    { $inc: { seq: 1 } },
+                    { 
+                        upsert: true, 
+                        returnDocument: 'after'
+                    }
+                );
+
+                if (!result) {
+                    throw new Error('Failed to get next ID');
+                }
+
+                const nextId = result.seq;
+
+                // Verificar que el ID no está en uso
+                const labelsCollection = db.collection('labels');
+                const existingLabel = await labelsCollection.findOne({ id: nextId });
+                
+                if (existingLabel) {
+                    // Si el ID ya está en uso, intentar de nuevo
+                    logger.warn(`ID ${nextId} already in use, retrying...`);
+                    continue;
+                }
+
+                return nextId;
+            } catch (error) {
+                logger.error('Error getting next ID:', error instanceof Error ? error.stack : error);
+                throw error;
+            }
         }
-
-        // Si no existe, creamos uno nuevo
-        await countersCollection.insertOne({
-            _id: 'labelId' as any,
-            seq: 1
-        });
-
-        return 1;
     }
 
     private async ensureIndexes(db: mongoose.mongo.Db): Promise<void> {
