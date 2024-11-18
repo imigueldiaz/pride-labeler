@@ -1,73 +1,37 @@
-import { ComAtprotoLabelDefs } from '@atcute/client/lexicons';
+import { ComAtprotoLabelDefs } from '@atproto/api';
 import { LabelerServer } from '@skyware/labeler';
 
 import { DID, SIGNING_KEY } from './config.js';
-import { DELETE, LABELS, LABEL_LIMIT } from './constants.js';
+import { DELETE, LABELS } from './constants.js';
 import logger from './logger.js';
+import { LabelService } from './services/labelService.js';
 
 export const labelerServer = new LabelerServer({ did: DID, signingKey: SIGNING_KEY });
+const labelService = new LabelService();
 
-export const label = (did: string, rkey: string) => {
-  logger.info(`Received rkey: ${rkey} for ${did}`);
-
-  if (rkey === 'self') {
-    logger.info(`${did} liked the labeler. Returning.`);
-    return;
-  }
-  try {
-    const labels = fetchCurrentLabels(did);
-
-    if (rkey.includes(DELETE)) {
-      deleteAllLabels(did, labels);
-    } else {
-      addOrUpdateLabel(did, rkey, labels);
-    }
-  } catch (error) {
-    logger.error(`Error in \`label\` function: ${error}`);
-  }
-};
-
-function fetchCurrentLabels(did: string) {
-  const query = labelerServer.db
-    .prepare<string[]>(`SELECT * FROM labels WHERE uri = ? ORDER BY cts DESC`)
-    .all(did) as ComAtprotoLabelDefs.Label[];
-
-  const labels = new Set<string>();
-  // Process labels in chronological order, newer entries take precedence
-  for (const label of query) {
-    if (!label.neg) {
-      labels.add(label.val);
-      logger.info(`Added label: ${label.val}`);
-    } else {
-      labels.delete(label.val);
-      logger.info(`Deleted label: ${label.val}`); 
-    }
-  }
-
-  if (labels.size > 0) {
-    logger.info(`Current labels: ${Array.from(labels).join(', ')}`);
-  }
-
-  return labels;
-}
-
-function deleteAllLabels(did: string, labels: Set<string>) {
+async function deleteAllLabels(did: string, labels: Set<string>) {
   const labelsToDelete: string[] = Array.from(labels);
 
   if (labelsToDelete.length === 0) {
     logger.info(`No labels to delete`);
-  } else {
-    logger.info(`Labels to delete: ${labelsToDelete.join(', ')}`);
-    try {
-      labelerServer.createLabels({ uri: did }, { negate: labelsToDelete });
-      logger.info('Successfully deleted all labels');
-    } catch (error) {
-      logger.error(`Error deleting all labels: ${error}`);
-    }
+    return;
+  }
+
+  logger.info(`Labels to delete: ${labelsToDelete.join(', ')}`);
+  try {
+    // Crear documentos de negación para cada etiqueta
+    await labelService.createNegationDocuments(did, labels);
+    
+    // Notificar al servidor de etiquetas
+    labelerServer.createLabels({ uri: did }, { negate: labelsToDelete });
+    logger.info('Successfully deleted all labels');
+  } catch (error) {
+    logger.error(`Error deleting labels: ${error}`);
+    throw error;
   }
 }
 
-function addOrUpdateLabel(did: string, rkey: string, labels: Set<string>) {
+async function addOrUpdateLabel(did: string, rkey: string, currentLabels: Set<string>) {
   const newLabel = LABELS.find((label) => label.rkey === rkey);
   if (!newLabel) {
     logger.warn(`New label not found: ${rkey}. Likely liked a post that's not one for labels.`);
@@ -75,27 +39,50 @@ function addOrUpdateLabel(did: string, rkey: string, labels: Set<string>) {
   }
   logger.info(`New label: ${newLabel.identifier}`);
 
-  // Check if the label already exists
-  if (labels.has(newLabel.identifier)) {
+  // Verificar si la etiqueta ya existe
+  if (currentLabels.has(newLabel.identifier)) {
     logger.info(`Label ${newLabel.identifier} already exists for ${did}`);
     return;
   }
 
-  // Add the new label along with existing ones
   try {
-    // Get all current labels plus the new one
-    const allLabels = new Set(labels);
+    // Obtener todas las etiquetas actuales más la nueva
+    const allLabels = new Set(currentLabels);
     allLabels.add(newLabel.identifier);
-    
-    // First negate all existing labels
-    if (labels.size > 0) {
-      labelerServer.createLabels({ uri: did }, { negate: Array.from(labels) });
+
+    // Primero negar todas las etiquetas existentes
+    if (currentLabels.size > 0) {
+      await labelService.createNegationDocuments(did, currentLabels);
+      labelerServer.createLabels({ uri: did }, { negate: Array.from(currentLabels) });
     }
-    
-    // Then create all labels at once
+
+    // Luego crear todas las etiquetas de una vez
+    await labelService.createLabelDocuments(did, allLabels);
     labelerServer.createLabels({ uri: did }, { create: Array.from(allLabels) });
     logger.info(`Successfully labeled ${did} with all labels: ${Array.from(allLabels).join(', ')}`);
   } catch (error) {
     logger.error(`Error adding labels: ${error}`);
+    throw error;
   }
 }
+
+export const label = async (did: string, rkey: string) => {
+  logger.info(`Received rkey: ${rkey} for ${did}`);
+
+  if (rkey === 'self') {
+    logger.info(`${did} liked the labeler. Returning.`);
+    return;
+  }
+
+  try {
+    const labels = await labelService.getCurrentLabels(did);
+
+    if (rkey.includes(DELETE)) {
+      await deleteAllLabels(did, labels);
+    } else {
+      await addOrUpdateLabel(did, rkey, labels);
+    }
+  } catch (error) {
+    logger.error(`Error in \`label\` function: ${error}`);
+  }
+};

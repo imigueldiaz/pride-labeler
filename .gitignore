@@ -31,3 +31,6 @@ ehthumbs.db
 Thumbs.db
 labels.db*
 bun.lockb
+
+# Backup files
+backups/

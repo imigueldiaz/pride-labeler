@@ -6,12 +6,22 @@ import { label, labelerServer } from './label.js';
 import logger from './logger.js';
 import { startMetricsServer } from './metrics.js';
 import { LabelerServer } from '@skyware/labeler';
+import { connectDB, disconnectDB } from './db/connection.js';
 
 let cursor = 0;
 let cursorUpdateInterval: NodeJS.Timeout;
 
 function epochUsToDateTime(cursor: number): string {
   return new Date(cursor / 1000).toISOString();
+}
+
+// Inicializar MongoDB
+try {
+  await connectDB();
+  logger.info('Successfully connected to MongoDB');
+} catch (error) {
+  logger.error('Failed to connect to MongoDB:', error);
+  process.exit(1);
 }
 
 try {
@@ -85,6 +95,7 @@ function shutdown() {
     jetstream.close();
     labelerServer.stop();
     metricsServer.close();
+    disconnectDB(); // Cerrar la conexión a MongoDB
   } catch (error) {
     logger.error(`Error shutting down gracefully: ${error}`);
     process.exit(1);

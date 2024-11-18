@@ -17,3 +17,5 @@ services:
         sync: false
       - key: BSKY_PASSWORD
         sync: false
+      - key: MONGODB_URI
+        sync: false # Se configurará manualmente en el dashboard de Render
