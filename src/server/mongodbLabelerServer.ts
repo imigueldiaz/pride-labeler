@@ -2,7 +2,6 @@ import { LabelerServer, SavedLabel } from '@skyware/labeler';
 import { LabelService } from '../services/labelService.js';
 import { FastifyRequest } from 'fastify';
 import logger from '../logger.js';
-import { LABELS } from '../constants.js';
 
 /**
  * Servidor de etiquetas que utiliza MongoDB como almacenamiento.
@@ -128,33 +127,26 @@ export class MongoDBLabelerServer extends LabelerServer {
             const { uri } = request.query as { uri?: string };
             logger.info(`Handling queryLabels request${uri ? ` for URI: ${uri}` : ''}`);
 
-            // Obtener las etiquetas actuales
-            const currentLabels = await this.labelService.getCurrentLabels(uri);
-            logger.info('Current labels:', Array.from(currentLabels));
+            // Obtener todas las etiquetas con metadatos
+            const labelsWithMetadata = await this.labelService.getAllLabelsWithMetadata();
+            logger.info('Labels with metadata:', JSON.stringify(labelsWithMetadata, null, 2));
 
-            // Si no hay URI, devolver todas las etiquetas disponibles
-            const labels: SavedLabel[] = Array.from(currentLabels).map((label, index) => {
-                const labelInfo = LABELS.find(l => l.identifier === label);
-                return {
-                    src: this.did as `did:${string}`,
-                    uri: uri || '',
-                    val: label,
-                    neg: false,
-                    cts: new Date().toISOString(),
-                    sig: new Uint8Array(),
-                    id: index,
-                    ...(labelInfo && { 
-                        locales: labelInfo.locales,
-                        rkey: labelInfo.rkey
-                    })
-                };
-            });
+            // Convertir al formato SavedLabel
+            const labels: SavedLabel[] = labelsWithMetadata.map(label => ({
+                src: label.src as `did:${string}`,
+                uri: label.uri,
+                val: label.val,
+                neg: label.neg,
+                cts: new Date(label.cts).toISOString(),
+                sig: Buffer.isBuffer(label.sig) ? new Uint8Array(label.sig) : new Uint8Array(),
+                id: label.id
+            }));
 
             logger.info('Transformed labels:', JSON.stringify(labels, null, 2));
 
             const response = {
                 cursor: new Date().getTime().toString(),
-                labels,
+                labels: labels.filter(label => !uri || label.uri === uri),
             };
             logger.info('Sending response:', JSON.stringify(response, null, 2));
             return response;

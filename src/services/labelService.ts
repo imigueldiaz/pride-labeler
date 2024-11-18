@@ -1,7 +1,33 @@
 import logger from '../logger.js';
 import mongoose from 'mongoose';
 import { connectDB } from '../db/connection.js';
-import { LABELS } from '../constants.js';
+import { Document, WithId } from 'mongodb';
+
+interface MongoLabel {
+    _id: string;
+    id: number;
+    src: string;
+    uri: string;
+    val: string;
+    neg: boolean;
+    cts: Date;
+    sig: Buffer;
+    ver: number;
+    __v: number;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+type MongoPipeline = {
+    $match?: { [key: string]: any };
+    $sort?: { [key: string]: number };
+    $group?: {
+        _id: any;
+        [key: string]: any;
+    };
+    $project?: { [key: string]: any };
+    $limit?: number;
+}[];
 
 export class LabelService {
     async getDatabase() {
@@ -17,15 +43,6 @@ export class LabelService {
             if (!db) {
                 throw new Error('Database connection is undefined');
             }
-
-            // Listar bases de datos y colecciones
-            logger.info('Listing databases...');
-            const adminDb = db.admin();
-            const dbs = await adminDb.listDatabases();
-            logger.info('Available databases:', dbs.databases.map(db => `${db.name} (${db.sizeOnDisk} bytes)`));
-
-            const collections = await db.listCollections().toArray();
-            logger.info('Collections in database:', collections.map(col => col.name));
 
             return db;
         } catch (error) {
@@ -46,49 +63,77 @@ export class LabelService {
             const count = await collection.countDocuments();
             logger.info(`Found ${count} documents in labels collection`);
 
-            // Si no hay URI, devolver todas las etiquetas disponibles
-            if (!uri) {
-                logger.info('No URI provided, returning all available labels');
-                const allLabels = new Set(LABELS.map(label => label.identifier));
-                logger.info('Available labels:', Array.from(allLabels));
-                return allLabels;
-            }
-
-            // Mostrar algunos documentos de ejemplo
-            const sampleDocs = await collection.find({ uri }).limit(3).toArray();
-            logger.info('Sample documents for URI:', JSON.stringify(sampleDocs, null, 2));
-
-            logger.info('Preparing aggregation pipeline...');
-            const pipeline = [
-                { $match: { uri } },
+            // Preparar el pipeline de agregación
+            const pipeline: MongoPipeline = [
                 { $sort: { createdAt: -1 } },
                 {
                     $group: {
-                        _id: '$label',
-                        negated: { $first: '$negated' },
-                        createdAt: { $first: '$createdAt' }
+                        _id: '$val',
+                        uri: { $first: '$uri' },
+                        src: { $first: '$src' },
+                        neg: { $first: '$neg' },
+                        cts: { $first: '$cts' },
+                        sig: { $first: '$sig' },
+                        id: { $first: '$id' }
                     }
-                },
-                {
-                    $match: {
-                        negated: { $ne: true }
-                    }
-                },
-                {
-                    $sort: { createdAt: -1 }
                 }
             ];
 
+            // Si hay URI, filtrar por ella
+            if (uri) {
+                pipeline.unshift({ $match: { uri } });
+            }
+
             logger.info('Executing aggregation pipeline:', JSON.stringify(pipeline, null, 2));
-            const result = await collection.aggregate(pipeline).toArray();
+            const result = await collection.aggregate<MongoLabel>(pipeline).toArray();
             logger.info('Raw aggregation results:', JSON.stringify(result, null, 2));
-            
+
+            // Extraer las etiquetas únicas
             const labels = new Set(result.map(doc => doc._id).filter(Boolean));
-            logger.info(`Retrieved ${labels.size} labels for URI: ${uri}`);
+            logger.info(`Retrieved ${labels.size} unique labels${uri ? ` for URI: ${uri}` : ''}`);
             logger.info('Labels:', Array.from(labels));
+
             return labels;
         } catch (error) {
             logger.error('Error getting current labels:', error instanceof Error ? error.stack : error);
+            throw error;
+        }
+    }
+
+    async getAllLabelsWithMetadata(): Promise<MongoLabel[]> {
+        try {
+            logger.info('Getting all labels with metadata');
+            const db = await this.getDatabase();
+            const collection = db.collection('labels');
+
+            // Obtener todos los documentos ordenados por fecha de creación
+            const documents = await collection
+                .find({})
+                .sort({ createdAt: -1 })
+                .toArray();
+
+            // Convertir los documentos al tipo MongoLabel
+            const result = documents.map(doc => ({
+                _id: doc._id.toString(),
+                id: doc.id,
+                src: doc.src,
+                uri: doc.uri,
+                val: doc.val,
+                neg: doc.neg,
+                cts: new Date(doc.cts),
+                sig: doc.sig,
+                ver: doc.ver,
+                __v: doc.__v,
+                createdAt: new Date(doc.createdAt),
+                updatedAt: new Date(doc.updatedAt)
+            })) as MongoLabel[];
+
+            logger.info(`Retrieved ${result.length} labels with metadata`);
+            logger.info('Labels with metadata:', JSON.stringify(result, null, 2));
+
+            return result;
+        } catch (error) {
+            logger.error('Error getting labels with metadata:', error instanceof Error ? error.stack : error);
             throw error;
         }
     }
@@ -101,12 +146,17 @@ export class LabelService {
             const db = await this.getDatabase();
             const collection = db.collection('labels');
 
-            const documents = labels.map(label => ({
+            const documents = labels.map((label, index) => ({
+                id: index,
+                src: 'did:plc:6mjpba7ftd6yljjgvhwgj46p',
                 uri,
-                label,
-                negated,
+                val: label,
+                neg: negated,
+                cts: new Date(),
+                sig: Buffer.from([]),
+                ver: 1,
                 createdAt: new Date(),
-                val: "0.5" // Valor por defecto para la confianza
+                updatedAt: new Date()
             }));
 
             logger.info('Inserting documents:', JSON.stringify(documents, null, 2));
