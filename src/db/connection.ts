@@ -18,69 +18,80 @@ let connection: typeof mongoose | null = null;
 export async function connectDB(): Promise<void> {
     try {
         const MONGODB_URI = process.env.MONGODB_URI;
-        logger.info('Attempting to connect to MongoDB...');
-        logger.info(`MongoDB URI: ${MONGODB_URI?.replace(/mongodb\+srv:\/\/([^:]+):[^@]+@/, 'mongodb+srv://$1:***@')}`);
+        
+        // Si ya hay una conexión activa, verificar su estado
+        if (connection && connection.connection.readyState === 1) {
+            logger.info('MongoDB is already connected and ready');
+            return;
+        }
 
         if (!MONGODB_URI) {
             throw new Error('MONGODB_URI environment variable is not defined');
         }
 
-        if (connection) {
-            logger.info('MongoDB is already connected');
-            return;
-        }
+        logger.info('Attempting to connect to MongoDB...');
+        logger.info(`MongoDB URI: ${MONGODB_URI?.replace(/mongodb\+srv:\/\/([^:]+):[^@]+@/, 'mongodb+srv://$1:***@')}`);
 
         // Opciones de conexión recomendadas por MongoDB
         const options = {
             useNewUrlParser: true,
             useUnifiedTopology: true,
+            serverSelectionTimeoutMS: 5000, // 5 segundos de timeout
+            socketTimeoutMS: 45000, // 45 segundos de timeout
         } as mongoose.ConnectOptions;
 
         logger.info('Connecting to MongoDB with options:', JSON.stringify(options));
-        connection = await mongoose.connect(MONGODB_URI, options);
-        logger.info('Successfully connected to MongoDB');
         
-        if (!connection.connection?.db) {
-            throw new Error('Failed to get database connection');
+        // Intentar conectar
+        connection = await mongoose.connect(MONGODB_URI, options);
+        
+        // Verificar que la conexión se estableció correctamente
+        if (connection.connection.readyState !== 1) {
+            throw new Error(`MongoDB connection is not ready. State: ${connection.connection.readyState}`);
         }
 
-        // Verificar la conexión listando las bases de datos
-        const admin = connection.connection.db.admin();
-        const dbInfo = await admin.listDatabases();
-        logger.info('Available databases:', dbInfo.databases.map(db => db.name));
+        logger.info('Successfully connected to MongoDB');
         
-        // Verificar la base de datos actual
-        const currentDb = connection.connection.db;
-        if (!currentDb) {
-            throw new Error('Failed to get current database');
+        // Verificar que podemos acceder a la base de datos
+        try {
+            const db = connection.connection.db;
+            if (!db) {
+                throw new Error('Database connection is undefined');
+            }
+
+            // Verificar que podemos ejecutar operaciones básicas
+            const collections = await db.listCollections().toArray();
+            logger.info('Successfully accessed database. Available collections:', 
+                collections.map(c => c.name).join(', '));
+
+        } catch (dbError) {
+            logger.error('Error accessing database after connection:', dbError);
+            throw dbError;
         }
-        logger.info('Current database:', currentDb.databaseName);
-        
-        // Listar colecciones
-        const collections = await currentDb.collections();
-        logger.info('Available collections:', collections.map(c => c.collectionName));
         
     } catch (error) {
-        logger.error('Error connecting to MongoDB:', error);
+        logger.error('Error connecting to MongoDB:', error instanceof Error ? error.stack : error);
+        // Limpiar la conexión si hubo un error
+        if (connection) {
+            await connection.connection.close();
+            connection = null;
+        }
         throw error;
     }
 }
 
 /**
- * Cierra la conexión con MongoDB
+ * Cierra la conexión a MongoDB
  */
 export async function disconnectDB(): Promise<void> {
     try {
-        if (!connection) {
-            logger.info('No MongoDB connection to close');
-            return;
+        if (connection) {
+            await connection.connection.close();
+            connection = null;
+            logger.info('MongoDB connection closed');
         }
-
-        await mongoose.disconnect();
-        connection = null;
-        logger.info('MongoDB connection closed');
     } catch (error) {
-        logger.error('Error disconnecting from MongoDB:', error);
+        logger.error('Error closing MongoDB connection:', error);
         throw error;
     }
 }

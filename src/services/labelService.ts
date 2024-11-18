@@ -24,15 +24,46 @@ export class LabelService {
         }
     }
 
+    /**
+     * Obtiene el cliente de MongoDB, creando uno nuevo si es necesario
+     */
     private async getClient(): Promise<MongoClient> {
-        if (!this.client) {
-            logger.info('No MongoDB client exists, initializing...');
-            await this.initializeClient();
+        try {
+            // Si ya tenemos un cliente conectado, lo devolvemos
+            if (this.client) {
+                try {
+                    await this.client.db('admin').command({ ping: 1 });
+                    logger.info('Using existing MongoDB client connection');
+                    return this.client;
+                } catch (pingError) {
+                    logger.warn('Existing client connection is not responsive:', pingError);
+                    await this.client.close();
+                    this.client = null;
+                }
+            }
+
+            // Intentar conectar usando la conexión global de mongoose
+            await connectDB();
+            const MONGODB_URI = process.env.MONGODB_URI;
+            if (!MONGODB_URI) {
+                throw new Error('MONGODB_URI environment variable is not defined');
+            }
+
+            logger.info('Creating new MongoDB client...');
+            this.client = new MongoClient(MONGODB_URI, {
+                serverSelectionTimeoutMS: 5000,
+                socketTimeoutMS: 45000,
+            });
+
+            await this.client.connect();
+            // Verificar que la conexión funciona
+            await this.client.db('admin').command({ ping: 1 });
+            logger.info('Successfully created and connected MongoDB client');
+            return this.client;
+        } catch (error) {
+            logger.error('Error getting MongoDB client:', error instanceof Error ? error.stack : error);
+            throw error;
         }
-        if (!this.client) {
-            throw new Error('Failed to initialize MongoDB client');
-        }
-        return this.client;
     }
 
     /**
@@ -113,17 +144,19 @@ export class LabelService {
                 pipeline.unshift({ $match: { uri } });
             }
 
-            pipeline.push({
-                $group: {
-                    _id: '$label',
-                    negated: { $first: '$negated' }
+            pipeline.push(
+                {
+                    $group: {
+                        _id: '$label',
+                        negated: { $first: '$negated' }
+                    }
+                },
+                {
+                    $match: {
+                        negated: false // Solo incluir etiquetas no negadas
+                    }
                 }
-            },
-            {
-                $match: {
-                    negated: false // Solo incluir etiquetas no negadas
-                }
-            });
+            );
 
             logger.info('Executing aggregation pipeline:', JSON.stringify(pipeline, null, 2));
             const result = await collection.aggregate(pipeline).toArray();
@@ -134,7 +167,7 @@ export class LabelService {
             logger.info('Labels:', Array.from(labels));
             return labels;
         } catch (error) {
-            logger.error('Error getting current labels:', error);
+            logger.error('Error getting current labels:', error instanceof Error ? error.stack : error);
             throw error;
         }
     }
