@@ -39,8 +39,8 @@ export class LabelService {
     async createLabelDocuments(uri: string, labels: Set<string>): Promise<void> {
         try {
             const client = await this.getClient();
-            const db = client.db();
-            const collection = db.collection('labels');
+            const db = client.db('pride-labeler01');
+            const collection = db.collection('test.labels');
 
             const documents = Array.from(labels).map(label => ({
                 uri,
@@ -65,8 +65,8 @@ export class LabelService {
     async createNegationDocuments(uri: string, labels: Set<string>): Promise<void> {
         try {
             const client = await this.getClient();
-            const db = client.db();
-            const collection = db.collection('labels');
+            const db = client.db('pride-labeler01');
+            const collection = db.collection('test.labels');
 
             const documents = Array.from(labels).map(label => ({
                 uri,
@@ -91,8 +91,8 @@ export class LabelService {
     async getCurrentLabels(uri: string): Promise<Set<string>> {
         try {
             const client = await this.getClient();
-            const db = client.db();
-            const collection = db.collection('labels');
+            const db = client.db('pride-labeler01');
+            const collection = db.collection('test.labels');
 
             // Obtener las etiquetas más recientes para cada label
             const pipeline = [
