@@ -1,6 +1,7 @@
 import { MongoClient } from 'mongodb';
 import { connectDB } from '../db/connection.js';
 import logger from '../logger.js';
+import mongoose from 'mongoose';
 
 export class LabelService {
     private client: MongoClient | null = null;
@@ -43,40 +44,31 @@ export class LabelService {
                 }
             }
 
-            // Intentar conectar usando la conexión global de mongoose
+            // Conectar usando mongoose
             logger.info('Creating new MongoDB connection...');
             await connectDB();
-            const MONGODB_URI = process.env.MONGODB_URI;
-            if (!MONGODB_URI) {
-                throw new Error('MONGODB_URI environment variable is not defined');
+            
+            if (!mongoose.connection || mongoose.connection.readyState !== 1) {
+                throw new Error('Mongoose connection is not ready');
             }
 
-            logger.info('Initializing new MongoDB client...');
-            this.client = new MongoClient(MONGODB_URI, {
-                serverSelectionTimeoutMS: 10000,
-                socketTimeoutMS: 45000,
-                connectTimeoutMS: 10000,
-                heartbeatFrequencyMS: 30000,
-            });
-
-            logger.info('Connecting to MongoDB...');
-            await this.client.connect();
+            // Obtener el cliente nativo de MongoDB
+            this.client = mongoose.connection.getClient();
             
             // Verificar que la conexión funciona
-            logger.info('Testing new MongoDB client connection...');
+            logger.info('Testing MongoDB client connection...');
             await this.client.db('admin').command({ ping: 1 });
-            
+
             // Listar bases de datos y colecciones
             logger.info('Listing databases...');
-            const adminDb = this.client.db('admin');
-            const dbs = await adminDb.admin().listDatabases();
-            logger.info('Available databases:', dbs.databases.map(db => db.name));
+            const dbs = await this.client.db('admin').admin().listDatabases();
+            logger.info('Available databases:', dbs.databases.map(db => `${db.name} (${db.sizeOnDisk} bytes)`));
 
-            const testDb = this.client.db('test');
-            const collections = await testDb.listCollections().toArray();
+            const db = this.client.db('test');
+            const collections = await db.listCollections().toArray();
             logger.info('Collections in test database:', collections.map(col => col.name));
 
-            logger.info('Successfully created and verified new MongoDB client connection');
+            logger.info('Successfully created and verified MongoDB client connection');
             return this.client;
         } catch (error) {
             logger.error('Error getting MongoDB client:', error instanceof Error ? error.stack : error);
@@ -167,16 +159,7 @@ export class LabelService {
             const client = await this.getClient();
             logger.info('Got MongoDB client, getting database...');
             
-            // Verificar las bases de datos disponibles
-            const adminDb = client.db('admin');
-            const dbs = await adminDb.admin().listDatabases();
-            logger.info('Available databases:', dbs.databases.map(db => `${db.name} (${db.sizeOnDisk} bytes)`));
-
             const db = client.db('test');
-            logger.info('Got database, listing collections...');
-            const collections = await db.listCollections().toArray();
-            logger.info('Collections in test database:', collections.map(col => col.name));
-
             logger.info('Getting labels collection...');
             const collection = db.collection('labels');
             
