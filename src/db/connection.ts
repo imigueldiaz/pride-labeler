@@ -10,31 +10,52 @@ const __dirname = dirname(__filename);
 // Cargar variables de entorno
 dotenv.config({ path: join(__dirname, '../..', '.env') });
 
-const MONGODB_URI = process.env.MONGODB_URI;
+let connection: typeof mongoose | null = null;
 
-logger.info('MongoDB URI:', MONGODB_URI ? 'Found' : 'Not found');
-
-if (!MONGODB_URI) {
-    logger.error('No MongoDB URI provided in environment variables');
-    process.exit(1);
-}
-
-export async function connectDB() {
+/**
+ * Conecta a MongoDB usando la URI proporcionada en las variables de entorno
+ */
+export async function connectDB(): Promise<void> {
     try {
-        logger.info('Connecting to MongoDB...');
-        await mongoose.connect(MONGODB_URI);
-        logger.info('Connected to MongoDB successfully');
+        const MONGODB_URI = process.env.MONGODB_URI;
+        if (!MONGODB_URI) {
+            throw new Error('MONGODB_URI environment variable is not defined');
+        }
+
+        if (connection) {
+            logger.info('MongoDB is already connected');
+            return;
+        }
+
+        // Opciones de conexión recomendadas por MongoDB
+        const options = {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+        } as mongoose.ConnectOptions;
+
+        connection = await mongoose.connect(MONGODB_URI, options);
+        logger.info('Successfully connected to MongoDB');
     } catch (error) {
         logger.error('Error connecting to MongoDB:', error);
-        process.exit(1);
+        throw error;
     }
 }
 
-export async function disconnectDB() {
+/**
+ * Cierra la conexión con MongoDB
+ */
+export async function disconnectDB(): Promise<void> {
     try {
+        if (!connection) {
+            logger.info('No MongoDB connection to close');
+            return;
+        }
+
         await mongoose.disconnect();
-        logger.info('Disconnected from MongoDB');
+        connection = null;
+        logger.info('MongoDB connection closed');
     } catch (error) {
         logger.error('Error disconnecting from MongoDB:', error);
+        throw error;
     }
 }
