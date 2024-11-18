@@ -40,6 +40,10 @@ export async function connectDB(): Promise<void> {
         connection = await mongoose.connect(MONGODB_URI, options);
         logger.info('Successfully connected to MongoDB');
         
+        if (!connection.connection?.db) {
+            throw new Error('Failed to get database connection');
+        }
+
         // Verificar la conexión listando las bases de datos
         const admin = connection.connection.db.admin();
         const dbInfo = await admin.listDatabases();
@@ -47,6 +51,9 @@ export async function connectDB(): Promise<void> {
         
         // Verificar la base de datos actual
         const currentDb = connection.connection.db;
+        if (!currentDb) {
+            throw new Error('Failed to get current database');
+        }
         logger.info('Current database:', currentDb.databaseName);
         
         // Listar colecciones
