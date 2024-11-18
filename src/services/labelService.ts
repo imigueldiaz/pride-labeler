@@ -218,7 +218,10 @@ export class LabelService {
             logger.info('Labels:', labels);
 
             const db = await this.getDatabase();
+            logger.info('Got database connection');
+            
             const collection = db.collection('labels');
+            logger.info('Got labels collection');
 
             // Crear documentos AT con objeto vacío para sig
             const atLabels: ATLabel[] = labels.map(label => ({
@@ -230,23 +233,39 @@ export class LabelService {
                 sig: {}
             }));
 
+            logger.info('Created AT labels:', JSON.stringify(atLabels, null, 2));
+
             try {
                 // Crear documentos MongoDB con IDs únicos
                 const documents = await Promise.all(
-                    atLabels.map(async (atLabel) => ({
-                        id: await this.getNextId(db),
-                        ...atLabel
-                    }))
+                    atLabels.map(async (atLabel) => {
+                        const id = await this.getNextId(db);
+                        logger.info(`Got next ID for label ${atLabel.val}: ${id}`);
+                        return {
+                            id,
+                            ...atLabel
+                        };
+                    })
                 );
+
+                logger.info('Created MongoDB documents:', JSON.stringify(documents, null, 2));
 
                 // Usar updateOne con upsert para evitar duplicados
                 for (const doc of documents) {
-                    await collection.updateOne(
+                    const result = await collection.updateOne(
                         { uri: doc.uri, val: doc.val, neg: doc.neg },
                         { $set: doc },
                         { upsert: true }
                     );
+                    
+                    logger.info(
+                        `Update result for ${doc.val}: ` +
+                        `matched=${result.matchedCount}, ` +
+                        `modified=${result.modifiedCount}, ` +
+                        `upserted=${result.upsertedCount}`
+                    );
                 }
+                
                 logger.info(`Successfully processed ${documents.length} documents`);
 
             } catch (error) {

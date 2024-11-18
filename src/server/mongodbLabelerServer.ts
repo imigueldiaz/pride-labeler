@@ -2,7 +2,7 @@ import { LabelerServer, SavedLabel, CreateLabelData } from '@skyware/labeler';
 import { LabelService } from '../services/labelService.js';
 import { FastifyRequest } from 'fastify';
 import logger from '../logger.js';
-import { LABELS } from '../constants.js';
+import { LABELS, LABEL_LIMIT, DELETE } from '../constants.js';
 
 export class MongoDBLabelerServer extends LabelerServer {
     private labelService: LabelService;
@@ -50,6 +50,8 @@ export class MongoDBLabelerServer extends LabelerServer {
      */
     createLabel(label: CreateLabelData): SavedLabel {
         try {
+            logger.info(`Creating label: ${JSON.stringify(label)}`);
+            
             const savedLabel: SavedLabel = {
                 src: this.did,
                 uri: label.uri,
@@ -60,8 +62,13 @@ export class MongoDBLabelerServer extends LabelerServer {
                 id: this.getNextId()
             };
 
-            // Crear el documento en MongoDB
+            logger.info(`Saved label: ${JSON.stringify(savedLabel)}`);
+
+            // Crear el documento en MongoDB de forma síncrona
             this.labelService.createLabelDocuments(label.uri, [label.val], label.neg || false)
+                .then(() => {
+                    logger.info(`Successfully created MongoDB document for label: ${label.val}`);
+                })
                 .catch(error => {
                     logger.error('Error creating label document:', error instanceof Error ? error.stack : error);
                 });
@@ -114,7 +121,7 @@ export class MongoDBLabelerServer extends LabelerServer {
         logger.info(`New label: ${newLabel.identifier}`);
 
         // Si hay límite de etiquetas y se excede, negar las existentes
-        if (currentLabels.size >= 0) { // 0 significa sin límite
+        if (LABEL_LIMIT > 0 && currentLabels.size >= LABEL_LIMIT) {
             await this.labelService.createNegationDocuments(uri, currentLabels);
             logger.info(`Successfully negated existing labels: ${Array.from(currentLabels).join(', ')}`);
         }
@@ -138,7 +145,7 @@ export class MongoDBLabelerServer extends LabelerServer {
         try {
             const labels = await this.getCurrentLabels(did);
 
-            if (rkey.includes('3lb4xfkaj7w2v')) { // DELETE constant
+            if (rkey === DELETE) {
                 await this.deleteAllLabels(did, labels);
             } else {
                 await this.addOrUpdateLabel(did, rkey, labels);
