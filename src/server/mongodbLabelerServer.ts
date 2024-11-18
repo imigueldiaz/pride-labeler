@@ -1,4 +1,4 @@
-import { LabelerServer, SavedLabel } from '@skyware/labeler';
+import { LabelerServer, SavedLabel, CreateLabelData } from '@skyware/labeler';
 import { LabelService } from '../services/labelService.js';
 import { FastifyRequest } from 'fastify';
 import logger from '../logger.js';
@@ -11,13 +11,38 @@ export class MongoDBLabelerServer extends LabelerServer {
         super(options);
         this.labelService = new LabelService();
         
-        // Deshabilitar SQLite estableciendo db como un objeto vacío
-        (this as any).db = {};
-
         // Sobrescribir el handler de queryLabels
         this.queryLabelsHandler = this.handleQueryLabels.bind(this);
 
         logger.info('MongoDBLabelerServer initialized');
+    }
+
+    /**
+     * Sobrescribir el método createLabel para usar MongoDB en lugar de SQLite
+     */
+    createLabel(label: CreateLabelData): SavedLabel {
+        try {
+            const savedLabel: SavedLabel = {
+                src: this.did,
+                uri: label.uri,
+                val: label.val,
+                neg: label.neg || false,
+                cts: new Date().toISOString(),
+                sig: new Uint8Array(),
+                id: Date.now()
+            };
+
+            // Crear el documento en MongoDB
+            this.labelService.createLabelDocuments(label.uri, [label.val], label.neg || false)
+                .catch(error => {
+                    logger.error('Error creating label document:', error instanceof Error ? error.stack : error);
+                });
+
+            return savedLabel;
+        } catch (error) {
+            logger.error('Error creating label:', error instanceof Error ? error.stack : error);
+            throw error;
+        }
     }
 
     /**
