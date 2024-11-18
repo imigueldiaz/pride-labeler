@@ -2,6 +2,7 @@ import { LabelerServer, SavedLabel } from '@skyware/labeler';
 import { LabelService } from '../services/labelService.js';
 import { FastifyRequest } from 'fastify';
 import logger from '../logger.js';
+import { LABELS } from '../constants.js';
 
 /**
  * Servidor de etiquetas que utiliza MongoDB como almacenamiento.
@@ -12,10 +13,24 @@ export class MongoDBLabelerServer extends LabelerServer {
     private labelService: LabelService;
     private pendingLabels: Map<string, Promise<SavedLabel[]>> = new Map();
     private retryInterval: NodeJS.Timeout | null = null;
+    private labelMap: Map<string, string>;
 
     constructor(options: { did: string; signingKey: string }) {
         super(options);
         this.labelService = new LabelService();
+        this.labelMap = new Map();
+
+        // Construir el mapa de etiquetas desde los locales
+        LABELS.forEach(label => {
+            // Añadir el identificador en inglés
+            this.labelMap.set(label.identifier.toLowerCase(), label.identifier);
+
+            // Añadir todas las variantes de idioma
+            label.locales.forEach(locale => {
+                const name = locale.name.split(' ')[0].toLowerCase(); // Tomar solo el nombre sin emojis
+                this.labelMap.set(name, label.identifier);
+            });
+        });
 
         // Deshabilitar SQLite estableciendo db como un objeto vacío
         (this as any).db = {};
@@ -26,7 +41,7 @@ export class MongoDBLabelerServer extends LabelerServer {
         // Iniciar el procesamiento de etiquetas pendientes
         this.startPendingLabelsProcessor();
 
-        logger.info('MongoDBLabelerServer initialized');
+        logger.info('MongoDBLabelerServer initialized with label map:', Object.fromEntries(this.labelMap));
     }
 
     /**
@@ -57,14 +72,47 @@ export class MongoDBLabelerServer extends LabelerServer {
     }
 
     /**
+     * Procesa el texto del post para encontrar etiquetas
+     */
+    private findLabelsInText(text: string): string[] {
+        const labels = new Set<string>();
+        const words = text.toLowerCase().split(/\s+/);
+        
+        // Buscar palabras individuales
+        for (const word of words) {
+            const label = this.labelMap.get(word);
+            if (label) {
+                labels.add(label);
+            }
+        }
+
+        // Buscar frases de dos palabras
+        for (let i = 0; i < words.length - 1; i++) {
+            const phrase = `${words[i]} ${words[i + 1]}`;
+            const label = this.labelMap.get(phrase);
+            if (label) {
+                labels.add(label);
+            }
+        }
+
+        return Array.from(labels);
+    }
+
+    /**
      * Crea etiquetas para un URI dado
      */
     override createLabels(
-        subject: { uri: string; cid?: string },
+        subject: { uri: string; cid?: string; text?: string },
         labels: { create?: string[]; negate?: string[] }
     ): SavedLabel[] {
-        const { uri } = subject;
-        const { create = [], negate = [] } = labels;
+        const { uri, text } = subject;
+        let { create = [], negate = [] } = labels;
+
+        // Si hay texto, buscar etiquetas en él
+        if (text) {
+            const foundLabels = this.findLabelsInText(text);
+            create = [...new Set([...create, ...foundLabels])];
+        }
 
         logger.info(`Creating labels for URI: ${uri}`);
         logger.info('Create labels:', create);
