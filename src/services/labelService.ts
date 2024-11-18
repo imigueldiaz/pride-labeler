@@ -29,15 +29,15 @@ export class LabelService {
      */
     private async getClient(): Promise<MongoClient> {
         try {
-            // Si ya tenemos un cliente conectado, lo devolvemos
+            // Si ya tenemos un cliente conectado, verificar que funciona
             if (this.client) {
                 try {
                     await this.client.db('admin').command({ ping: 1 });
                     logger.info('Using existing MongoDB client connection');
                     return this.client;
                 } catch (pingError) {
-                    logger.warn('Existing client connection is not responsive:', pingError);
-                    await this.client.close();
+                    logger.warn('Existing client connection is not responsive, will create new connection:', pingError);
+                    await this.client.close().catch(err => logger.warn('Error closing unresponsive client:', err));
                     this.client = null;
                 }
             }
@@ -51,8 +51,10 @@ export class LabelService {
 
             logger.info('Creating new MongoDB client...');
             this.client = new MongoClient(MONGODB_URI, {
-                serverSelectionTimeoutMS: 5000,
+                serverSelectionTimeoutMS: 10000,
                 socketTimeoutMS: 45000,
+                connectTimeoutMS: 10000,
+                heartbeatFrequencyMS: 30000,
             });
 
             await this.client.connect();
@@ -62,6 +64,10 @@ export class LabelService {
             return this.client;
         } catch (error) {
             logger.error('Error getting MongoDB client:', error instanceof Error ? error.stack : error);
+            if (this.client) {
+                await this.client.close().catch(err => logger.warn('Error closing failed client:', err));
+                this.client = null;
+            }
             throw error;
         }
     }
