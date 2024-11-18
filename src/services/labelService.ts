@@ -166,17 +166,33 @@ export class LabelService {
             logger.info(`Getting current labels${uri ? ` for URI: ${uri}` : ''}`);
             const client = await this.getClient();
             logger.info('Got MongoDB client, getting database...');
-            const db = client.db('test'); // Asegurarnos de que estamos usando la base de datos correcta
-            logger.info('Got database, getting collection...');
-            const collection = db.collection('labels');
-            logger.info('Got collection, preparing pipeline...');
+            
+            // Verificar las bases de datos disponibles
+            const adminDb = client.db('admin');
+            const dbs = await adminDb.admin().listDatabases();
+            logger.info('Available databases:', dbs.databases.map(db => `${db.name} (${db.sizeOnDisk} bytes)`));
 
-            // Pipeline base
+            const db = client.db('test');
+            logger.info('Got database, listing collections...');
+            const collections = await db.listCollections().toArray();
+            logger.info('Collections in test database:', collections.map(col => col.name));
+
+            logger.info('Getting labels collection...');
+            const collection = db.collection('labels');
+            
+            // Verificar que podemos acceder a la colección
+            const count = await collection.countDocuments();
+            logger.info(`Found ${count} documents in labels collection`);
+
+            // Mostrar algunos documentos de ejemplo
+            const sampleDocs = await collection.find().limit(3).toArray();
+            logger.info('Sample documents:', JSON.stringify(sampleDocs, null, 2));
+
+            logger.info('Preparing aggregation pipeline...');
             const pipeline: any[] = [
                 { $sort: { createdAt: -1 } }
             ];
 
-            // Si se proporciona URI, filtrar por ella
             if (uri) {
                 logger.info(`Adding URI filter to pipeline: ${uri}`);
                 pipeline.unshift({ $match: { uri } });
@@ -192,7 +208,7 @@ export class LabelService {
                 },
                 {
                     $match: {
-                        negated: { $ne: true } // Solo incluir etiquetas no negadas
+                        negated: { $ne: true }
                     }
                 },
                 {
@@ -201,11 +217,6 @@ export class LabelService {
             );
 
             logger.info('Executing aggregation pipeline:', JSON.stringify(pipeline, null, 2));
-            
-            // Primero verificar si hay documentos en la colección
-            const count = await collection.countDocuments();
-            logger.info(`Total documents in collection: ${count}`);
-
             const result = await collection.aggregate(pipeline).toArray();
             logger.info('Raw aggregation results:', JSON.stringify(result, null, 2));
             
