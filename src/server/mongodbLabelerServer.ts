@@ -23,7 +23,6 @@ interface CreateLabelsParams {
  */
 export class MongoDBLabelerServer extends LabelerServer {
     private labelService: LabelService;
-    private labelCounter: number = 0;
     private pendingLabels: Map<string, Promise<ComAtprotoLabelDefs.Label[]>> = new Map();
 
     constructor(options: { did: string; signingKey: string }) {
@@ -33,29 +32,49 @@ export class MongoDBLabelerServer extends LabelerServer {
         // Deshabilitar SQLite estableciendo db como un objeto vacío
         (this as any).db = {};
 
-        // Sobrescribir los métodos del servidor base
-        this.queryLabelsHandler = this.handleQueryLabels.bind(this);
+        // Registrar el endpoint de queryLabels
+        this.app.get('/xrpc/com.atproto.label.queryLabels', async (request, reply) => {
+            try {
+                const response = await this.handleQueryLabels(request);
+                reply.send(response);
+            } catch (error) {
+                logger.error('Error handling queryLabels:', error);
+                reply.status(500).send({ error: 'Internal Server Error' });
+            }
+        });
     }
 
     /**
-     * Sobrescribe el método queryLabelsHandler del servidor base.
-     * Este método es llamado cuando se hace una petición GET a /xrpc/com.atproto.label.queryLabels
+     * Maneja las peticiones GET a /xrpc/com.atproto.label.queryLabels
      */
     private async handleQueryLabels(request: FastifyRequest): Promise<{ cursor: string; labels: ComAtprotoLabelDefs.Label[] }> {
         try {
+            logger.info('Handling queryLabels request...');
             const { uri } = request.query as QueryLabelsParams;
-            const labels = await this.labelService.getCurrentLabels(uri);
-            const labelObjects = Array.from(labels).map(val => ({
-                src: this.did as `did:${string}`,
-                uri: uri || '*',
-                val: val,
-                cts: new Date().toISOString()
-            }));
+            logger.info(`Query parameters - URI: ${uri || 'not provided'}`);
 
-            return {
+            logger.info('Calling labelService.getCurrentLabels...');
+            const labels = await this.labelService.getCurrentLabels(uri);
+            logger.info(`Got ${labels.size} labels from service`);
+
+            logger.info('Converting labels to AT Protocol format...');
+            const labelObjects = Array.from(labels).map(val => {
+                const label = {
+                    src: this.did as `did:${string}`,
+                    uri: uri || '*',
+                    val: val,
+                    cts: new Date().toISOString()
+                };
+                logger.info('Created label object:', label);
+                return label;
+            });
+
+            const response = {
                 cursor: '0',
                 labels: labelObjects
             };
+            logger.info('Sending response:', JSON.stringify(response, null, 2));
+            return response;
         } catch (error) {
             logger.error('Error querying labels:', error);
             throw error;

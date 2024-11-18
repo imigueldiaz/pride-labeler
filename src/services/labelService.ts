@@ -11,10 +11,13 @@ export class LabelService {
 
     private async initializeClient(): Promise<void> {
         try {
+            logger.info('Initializing MongoDB client...');
             await connectDB();
+            logger.info('ConnectDB completed, creating new MongoClient...');
             this.client = new MongoClient(process.env.MONGODB_URI || '');
+            logger.info(`Connecting to MongoDB with URI: ${process.env.MONGODB_URI}`);
             await this.client.connect();
-            logger.info('MongoDB client initialized');
+            logger.info('MongoDB client initialized and connected successfully');
         } catch (error) {
             logger.error('Error initializing MongoDB client:', error);
             throw error;
@@ -23,6 +26,7 @@ export class LabelService {
 
     private async getClient(): Promise<MongoClient> {
         if (!this.client) {
+            logger.info('No MongoDB client exists, initializing...');
             await this.initializeClient();
         }
         if (!this.client) {
@@ -90,9 +94,13 @@ export class LabelService {
      */
     async getCurrentLabels(uri?: string): Promise<Set<string>> {
         try {
+            logger.info('Getting current labels...');
             const client = await this.getClient();
+            logger.info('Got MongoDB client, getting database...');
             const db = client.db('test');
+            logger.info('Got database, getting collection...');
             const collection = db.collection('labels');
+            logger.info('Got collection, preparing pipeline...');
 
             // Pipeline base
             const pipeline: any[] = [
@@ -101,6 +109,7 @@ export class LabelService {
 
             // Si se proporciona URI, filtrar por ella
             if (uri) {
+                logger.info(`Adding URI filter to pipeline: ${uri}`);
                 pipeline.unshift({ $match: { uri } });
             }
 
@@ -116,9 +125,13 @@ export class LabelService {
                 }
             });
 
+            logger.info('Executing aggregation pipeline:', JSON.stringify(pipeline, null, 2));
             const result = await collection.aggregate(pipeline).toArray();
+            logger.info('Raw aggregation results:', JSON.stringify(result, null, 2));
+            
             const labels = new Set(result.map(doc => doc._id));
             logger.info(`Retrieved ${labels.size} labels${uri ? ` for URI: ${uri}` : ''}`);
+            logger.info('Labels:', Array.from(labels));
             return labels;
         } catch (error) {
             logger.error('Error getting current labels:', error);
