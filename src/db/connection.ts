@@ -10,23 +10,23 @@ const __dirname = dirname(__filename);
 // Cargar variables de entorno
 dotenv.config({ path: join(__dirname, '../..', '.env') });
 
-let connection: typeof mongoose | null = null;
 let isConnecting = false;
 
 /**
  * Conecta a MongoDB usando la URI proporcionada en las variables de entorno
  */
-export async function connectDB(): Promise<void> {
+export async function connectDB(): Promise<typeof mongoose> {
     // Evitar múltiples conexiones simultáneas
     if (isConnecting) {
         logger.info('Connection attempt already in progress, waiting...');
-        return;
+        return mongoose;
     }
 
     // Si ya hay una conexión activa y está lista, usarla
-    if (connection?.connection?.readyState === 1) {
+    const readyState = mongoose.connection.readyState as mongoose.ConnectionStates;
+    if (readyState === mongoose.ConnectionStates.connected) {
         logger.info('MongoDB is already connected and ready');
-        return;
+        return mongoose;
     }
 
     try {
@@ -42,36 +42,27 @@ export async function connectDB(): Promise<void> {
 
         // Opciones de conexión
         const options = {
-            serverSelectionTimeoutMS: 10000, // 10 segundos de timeout
-            socketTimeoutMS: 45000, // 45 segundos de timeout
-            connectTimeoutMS: 10000, // 10 segundos de timeout para la conexión inicial
-            heartbeatFrequencyMS: 30000, // Latido cada 30 segundos
+            serverSelectionTimeoutMS: 10000,
+            socketTimeoutMS: 45000,
+            connectTimeoutMS: 10000,
+            heartbeatFrequencyMS: 30000,
         } as mongoose.ConnectOptions;
 
         logger.info('Connecting to MongoDB with options:', JSON.stringify(options));
         
-        // Limpiar conexión existente si la hay
-        if (connection) {
-            try {
-                await connection.connection.close();
-                connection = null;
-            } catch (closeError) {
-                logger.warn('Error closing existing connection:', closeError);
-            }
-        }
-
         // Intentar conectar
-        connection = await mongoose.connect(MONGODB_URI, options);
+        await mongoose.connect(MONGODB_URI, options);
         
         // Verificar el estado de la conexión
-        if (connection.connection.readyState !== 1) {
-            throw new Error(`MongoDB connection is not ready. State: ${connection.connection.readyState}`);
+        const currentState = mongoose.connection.readyState as mongoose.ConnectionStates;
+        if (currentState !== mongoose.ConnectionStates.connected) {
+            throw new Error(`MongoDB connection is not ready. State: ${currentState}`);
         }
 
         logger.info('Successfully connected to MongoDB');
         
         // Verificar que podemos acceder a la base de datos
-        const db = connection.connection.db;
+        const db = mongoose.connection.db;
         if (!db) {
             throw new Error('Database connection is undefined');
         }
@@ -82,36 +73,28 @@ export async function connectDB(): Promise<void> {
             collections.map(c => c.name).join(', '));
 
         // Configurar event listeners para la conexión
-        connection.connection.on('error', (err) => {
+        mongoose.connection.on('error', (err) => {
             logger.error('MongoDB connection error:', err);
         });
 
-        connection.connection.on('disconnected', () => {
+        mongoose.connection.on('disconnected', () => {
             logger.warn('MongoDB disconnected');
+            isConnecting = false;
         });
 
-        connection.connection.on('reconnected', () => {
+        mongoose.connection.on('reconnected', () => {
             logger.info('MongoDB reconnected');
         });
-        
+
+        return mongoose;
     } catch (error) {
         logger.error('Error connecting to MongoDB:', error instanceof Error ? error.stack : error);
         if (error instanceof Error) {
             logger.error('Error details:', {
                 name: error.name,
                 message: error.message,
-                stack: error.stack,
-                cause: error.cause
+                stack: error.stack
             });
-        }
-        // Limpiar la conexión si hubo un error
-        if (connection) {
-            try {
-                await connection.connection.close();
-            } catch (closeError) {
-                logger.warn('Error closing failed connection:', closeError);
-            }
-            connection = null;
         }
         throw error;
     } finally {
@@ -124,13 +107,10 @@ export async function connectDB(): Promise<void> {
  */
 export async function disconnectDB(): Promise<void> {
     try {
-        if (connection) {
-            await connection.connection.close();
-            connection = null;
-            logger.info('MongoDB connection closed');
-        }
+        await mongoose.disconnect();
+        logger.info('MongoDB disconnected');
     } catch (error) {
-        logger.error('Error closing MongoDB connection:', error instanceof Error ? error.stack : error);
+        logger.error('Error disconnecting from MongoDB:', error);
         throw error;
     }
 }
