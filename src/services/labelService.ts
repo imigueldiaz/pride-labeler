@@ -1,21 +1,30 @@
 import logger from '../logger.js';
 import mongoose from 'mongoose';
 import { connectDB } from '../db/connection.js';
-import { Document, WithId } from 'mongodb';
+import { Document, WithId, ObjectId } from 'mongodb';
 
-interface MongoLabel {
-    _id: string;
-    id: number;
+// Campos del protocolo AT
+interface ATLabel {
     src: string;
     uri: string;
     val: string;
     neg: boolean;
     cts: Date;
     sig: Buffer;
-    ver: number;
-    __v: number;
-    createdAt: Date;
-    updatedAt: Date;
+}
+
+// Documento MongoDB que extiende los campos AT
+interface MongoLabel extends ATLabel {
+    _id: string;
+    id: number;
+}
+
+// Documento pendiente para reintentos
+interface PendingLabel {
+    _id?: ObjectId;
+    atLabel: ATLabel;
+    retryCount: number;
+    lastRetry?: Date;
 }
 
 type MongoPipeline = {
@@ -28,6 +37,9 @@ type MongoPipeline = {
     $project?: { [key: string]: any };
     $limit?: number;
 }[];
+
+const MAX_RETRY_COUNT = 3;
+const RETRY_DELAY_MS = 5000;
 
 export class LabelService {
     async getDatabase() {
@@ -65,7 +77,7 @@ export class LabelService {
 
             // Preparar el pipeline de agregación
             const pipeline: MongoPipeline = [
-                { $sort: { createdAt: -1 } },
+                { $sort: { cts: -1 } },
                 {
                     $group: {
                         _id: '$val',
@@ -109,7 +121,7 @@ export class LabelService {
             // Obtener todos los documentos ordenados por fecha de creación
             const documents = await collection
                 .find({})
-                .sort({ createdAt: -1 })
+                .sort({ cts: -1 })
                 .toArray();
 
             // Convertir los documentos al tipo MongoLabel
@@ -121,11 +133,7 @@ export class LabelService {
                 val: doc.val,
                 neg: doc.neg,
                 cts: new Date(doc.cts),
-                sig: doc.sig,
-                ver: doc.ver,
-                __v: doc.__v,
-                createdAt: new Date(doc.createdAt),
-                updatedAt: new Date(doc.updatedAt)
+                sig: doc.sig
             })) as MongoLabel[];
 
             logger.info(`Retrieved ${result.length} labels with metadata`);
@@ -145,32 +153,93 @@ export class LabelService {
 
             const db = await this.getDatabase();
             const collection = db.collection('labels');
+            const pendingCollection = db.collection('pending_labels');
 
-            const documents = labels.map((label, index) => ({
-                id: index,
+            // Crear documentos AT
+            const atLabels: ATLabel[] = labels.map(label => ({
                 src: 'did:plc:6mjpba7ftd6yljjgvhwgj46p',
                 uri,
                 val: label,
                 neg: negated,
                 cts: new Date(),
-                sig: Buffer.from([]),
-                ver: 1,
-                createdAt: new Date(),
-                updatedAt: new Date()
+                sig: Buffer.from([])
             }));
 
-            logger.info('Inserting documents:', JSON.stringify(documents, null, 2));
-            const result = await collection.insertMany(documents);
-            logger.info(`Successfully inserted ${result.insertedCount} documents`);
+            // Crear documentos pendientes
+            const pendingLabels: PendingLabel[] = atLabels.map(atLabel => ({
+                atLabel,
+                retryCount: 0
+            }));
 
-            // Verificar los documentos insertados
-            const inserted = await collection.find({
-                _id: { $in: Object.values(result.insertedIds) }
-            }).toArray();
-            logger.info('Inserted documents:', JSON.stringify(inserted, null, 2));
+            // Guardar en la colección de pendientes
+            const pendingResult = await pendingCollection.insertMany(pendingLabels);
+            const pendingIds = Object.values(pendingResult.insertedIds);
+            logger.info('Saved to pending collection:', JSON.stringify(pendingLabels, null, 2));
+
+            try {
+                // Crear documentos MongoDB
+                const documents = atLabels.map((atLabel, index) => ({
+                    id: index,
+                    ...atLabel
+                }));
+
+                logger.info('Inserting documents:', JSON.stringify(documents, null, 2));
+                const result = await collection.insertMany(documents);
+                logger.info(`Successfully inserted ${result.insertedCount} documents`);
+
+                // Eliminar de pendientes
+                await pendingCollection.deleteMany({ _id: { $in: pendingIds } });
+                logger.info('Documents removed from pending');
+
+            } catch (error) {
+                logger.error('Error processing labels, will retry later:', error instanceof Error ? error.stack : error);
+                // Los documentos pendientes permanecen para retry posterior
+            }
         } catch (error) {
             logger.error('Error creating label documents:', error instanceof Error ? error.stack : error);
             throw error;
+        }
+    }
+
+    async processPendingLabels(): Promise<void> {
+        try {
+            const db = await this.getDatabase();
+            const pendingCollection = db.collection('pending_labels');
+            const labelsCollection = db.collection('labels');
+
+            const pendingLabels = await pendingCollection
+                .find({ retryCount: { $lt: MAX_RETRY_COUNT } })
+                .toArray();
+
+            for (const pending of pendingLabels) {
+                try {
+                    logger.info('Processing pending label:', JSON.stringify(pending, null, 2));
+
+                    const document = {
+                        id: 0, // Se asignará un nuevo ID
+                        ...pending.atLabel
+                    };
+
+                    await labelsCollection.insertOne(document);
+                    await pendingCollection.deleteOne({ _id: pending._id });
+                    logger.info('Successfully processed pending label');
+
+                } catch (error) {
+                    logger.error('Error processing pending label:', error instanceof Error ? error.stack : error);
+                    await pendingCollection.updateOne(
+                        { _id: pending._id },
+                        { 
+                            $inc: { retryCount: 1 },
+                            $set: { lastRetry: new Date() }
+                        }
+                    );
+                }
+
+                // Esperar antes de procesar el siguiente
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            }
+        } catch (error) {
+            logger.error('Error processing pending labels:', error instanceof Error ? error.stack : error);
         }
     }
 

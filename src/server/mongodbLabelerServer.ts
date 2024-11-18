@@ -11,6 +11,7 @@ import logger from '../logger.js';
 export class MongoDBLabelerServer extends LabelerServer {
     private labelService: LabelService;
     private pendingLabels: Map<string, Promise<SavedLabel[]>> = new Map();
+    private retryInterval: NodeJS.Timeout | null = null;
 
     constructor(options: { did: string; signingKey: string }) {
         super(options);
@@ -22,7 +23,37 @@ export class MongoDBLabelerServer extends LabelerServer {
         // Sobrescribir el handler de queryLabels
         this.queryLabelsHandler = this.handleQueryLabels.bind(this);
 
+        // Iniciar el procesamiento de etiquetas pendientes
+        this.startPendingLabelsProcessor();
+
         logger.info('MongoDBLabelerServer initialized');
+    }
+
+    /**
+     * Inicia el procesador de etiquetas pendientes
+     */
+    private startPendingLabelsProcessor(): void {
+        if (this.retryInterval) {
+            clearInterval(this.retryInterval);
+        }
+
+        this.retryInterval = setInterval(async () => {
+            try {
+                await this.labelService.processPendingLabels();
+            } catch (error) {
+                logger.error('Error processing pending labels:', error instanceof Error ? error.stack : error);
+            }
+        }, 30000); // Procesar cada 30 segundos
+    }
+
+    /**
+     * Detiene el procesador de etiquetas pendientes
+     */
+    private stopPendingLabelsProcessor(): void {
+        if (this.retryInterval) {
+            clearInterval(this.retryInterval);
+            this.retryInterval = null;
+        }
     }
 
     /**
