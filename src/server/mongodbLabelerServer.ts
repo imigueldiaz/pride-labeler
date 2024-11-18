@@ -1,7 +1,8 @@
 import { LabelerServer } from '@skyware/labeler';
 import { LabelService } from '../services/labelService.js';
 import logger from '../logger.js';
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyRequest } from 'fastify';
+import { ComAtprotoLabelDefs } from '@atproto/api';
 
 interface QueryLabelsParams {
     uri?: string;
@@ -15,26 +16,6 @@ interface CreateLabelsParams {
     negate?: string[];
 }
 
-// Tipos basados en la implementación de @skyware/labeler
-interface SavedLabel {
-    src: string;
-    uri: string;
-    cid?: string;
-    val: string;
-    cts: string;
-    exp?: string;
-    sig: Uint8Array;
-}
-
-// Tipos para las etiquetas de la API de Bluesky
-interface Label {
-    src: string;
-    uri: string;
-    val: string;
-    cts: string;
-    neg?: boolean;
-}
-
 /**
  * Implementación del servidor de etiquetas que usa MongoDB para almacenamiento.
  * Esta clase extiende el LabelerServer base pero reemplaza el almacenamiento SQLite
@@ -42,6 +23,8 @@ interface Label {
  */
 export class MongoDBLabelerServer extends LabelerServer {
     private labelService: LabelService;
+    private labelCounter: number = 0;
+    private pendingLabels: Map<string, Promise<ComAtprotoLabelDefs.Label[]>> = new Map();
 
     constructor(options: { did: string; signingKey: string }) {
         super(options);
@@ -50,43 +33,73 @@ export class MongoDBLabelerServer extends LabelerServer {
         // Deshabilitar SQLite estableciendo db como un objeto vacío
         (this as any).db = {};
 
-        // Sobrescribir los endpoints principales
-        this.app.get('/xrpc/com.atproto.label.queryLabels', this.handleQueryLabels.bind(this));
-        this.app.post('/xrpc/com.atproto.label.createLabels', this.handleCreateLabels.bind(this));
+        // Sobrescribir los métodos del servidor base
+        this.queryLabelsHandler = this.handleQueryLabels.bind(this);
     }
 
-    private async handleQueryLabels(request: FastifyRequest, reply: FastifyReply) {
+    /**
+     * Sobrescribe el método queryLabelsHandler del servidor base.
+     * Este método es llamado cuando se hace una petición GET a /xrpc/com.atproto.label.queryLabels
+     */
+    private async handleQueryLabels(request: FastifyRequest): Promise<{ cursor: string; labels: ComAtprotoLabelDefs.Label[] }> {
         try {
             const { uri } = request.query as QueryLabelsParams;
             
             if (!uri) {
-                return reply.code(400).send({ error: 'URI parameter is required' });
+                throw new Error('URI parameter is required');
             }
 
             const labels = await this.labelService.getCurrentLabels(uri);
             const labelObjects = Array.from(labels).map(val => ({
-                src: this.did,
+                src: this.did as `did:${string}`,
                 uri: uri,
                 val: val,
                 cts: new Date().toISOString()
-            })) as Label[];
+            }));
 
-            return reply.send({
+            return {
                 cursor: '0',
                 labels: labelObjects
-            });
+            };
         } catch (error) {
             logger.error('Error querying labels:', error);
-            return reply.code(500).send({ error: 'Internal server error' });
+            throw error;
         }
     }
 
-    private async handleCreateLabels(request: FastifyRequest, reply: FastifyReply) {
+    /**
+     * Sobrescribe el método createLabels del servidor base.
+     * Este método es llamado cuando se hace una petición POST a /xrpc/com.atproto.label.createLabels
+     * 
+     * Para mantener la compatibilidad con el servidor base, que espera un array síncrono,
+     * guardamos la promesa en un Map y devolvemos un array vacío. La promesa se resolverá
+     * más tarde y los resultados estarán disponibles a través de queryLabels.
+     */
+    override createLabels(subject: { uri: string; cid?: string }, labels: { create?: string[]; negate?: string[] }): { src: `did:${string}`; uri: string; cid?: string; val: string; cts: string; neg?: boolean; sig: ArrayBuffer; id: number }[] {
+        const { uri } = subject;
+
+        // Crear una promesa para procesar las etiquetas
+        const promise = this.processLabels(subject, labels);
+        
+        // Guardar la promesa para su resolución posterior
+        this.pendingLabels.set(uri, promise);
+
+        // Devolver un array vacío ya que los resultados estarán disponibles a través de queryLabels
+        return [];
+    }
+
+    /**
+     * Procesa las etiquetas de forma asíncrona.
+     * @param subject El sujeto de las etiquetas
+     * @param labels Las etiquetas a procesar
+     */
+    private async processLabels(subject: { uri: string; cid?: string }, labels: { create?: string[]; negate?: string[] }): Promise<ComAtprotoLabelDefs.Label[]> {
         try {
-            const { uri, create, negate } = request.body as CreateLabelsParams;
+            const { uri } = subject;
+            const { create, negate } = labels;
 
             if (!uri) {
-                return reply.code(400).send({ error: 'URI parameter is required' });
+                throw new Error('URI parameter is required');
             }
 
             // Procesar etiquetas a negar primero
@@ -101,20 +114,20 @@ export class MongoDBLabelerServer extends LabelerServer {
 
             // Obtener las etiquetas actuales
             const currentLabels = await this.labelService.getCurrentLabels(uri);
-            const savedLabels = Array.from(currentLabels).map(val => ({
-                src: this.did,
+            
+            // Convertir las etiquetas a Label con todos los campos requeridos
+            return Array.from(currentLabels).map(val => ({
+                src: this.did as `did:${string}`,
                 uri: uri,
+                cid: subject.cid,
                 val: val,
                 cts: new Date().toISOString(),
-                sig: new Uint8Array() // Firma vacía ya que no la necesitamos para MongoDB
-            })) as SavedLabel[];
-
-            return reply.send({
-                labels: savedLabels
-            });
+                neg: false,
+                sig: new Uint8Array()
+            }));
         } catch (error) {
-            logger.error('Error creating labels:', error);
-            return reply.code(500).send({ error: 'Internal server error' });
+            logger.error('Error processing labels:', error);
+            throw error;
         }
     }
 }

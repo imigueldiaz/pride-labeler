@@ -1,75 +1,82 @@
-import { Label } from '../models/Label.js';
+import { MongoClient } from 'mongodb';
+import { connectDB } from '../db/connection.js';
 import logger from '../logger.js';
 
 export class LabelService {
-    /**
-     * Obtiene las etiquetas actuales para un DID específico
-     */
-    async getCurrentLabels(did: string): Promise<Set<string>> {
+    private client: MongoClient | null = null;
+
+    constructor() {
+        this.initializeClient();
+    }
+
+    private async initializeClient(): Promise<void> {
         try {
-            // Obtener las etiquetas más recientes para cada valor, ordenadas por fecha
-            const labels = await Label.aggregate([
-                // Filtrar por el DID específico
-                { $match: { uri: did } },
-                // Agrupar por valor de etiqueta y obtener el documento más reciente
-                {
-                    $group: {
-                        _id: "$val",
-                        latestDoc: { $first: "$$ROOT" },
-                        latestDate: { $max: "$cts" }
-                    }
-                },
-                // Filtrar solo las etiquetas activas (no negadas)
-                { $match: { "latestDoc.neg": false } },
-                // Proyectar solo los campos necesarios
-                {
-                    $project: {
-                        _id: 0,
-                        val: "$latestDoc.val",
-                        uri: "$latestDoc.uri",
-                        cts: "$latestDoc.cts"
-                    }
-                }
-            ]);
-
-            // Convertir los resultados a un Set de valores
-            const activeLabels = new Set<string>();
-            for (const label of labels) {
-                if (label.val) {
-                    activeLabels.add(label.val);
-                    logger.info(`Active label found: ${label.val}`);
-                }
-            }
-
-            if (activeLabels.size > 0) {
-                logger.info(`Current active labels: ${Array.from(activeLabels).join(', ')}`);
-            } else {
-                logger.info(`No active labels found for ${did}`);
-            }
-
-            return activeLabels;
+            await connectDB();
+            this.client = new MongoClient(process.env.MONGODB_URI || '');
+            await this.client.connect();
+            logger.info('MongoDB client initialized');
         } catch (error) {
-            logger.error('Error fetching labels:', error);
+            logger.error('Error initializing MongoDB client:', error);
+            throw error;
+        }
+    }
+
+    private async getClient(): Promise<MongoClient> {
+        if (!this.client) {
+            await this.initializeClient();
+        }
+        if (!this.client) {
+            throw new Error('Failed to initialize MongoDB client');
+        }
+        return this.client;
+    }
+
+    /**
+     * Crea documentos de etiquetas en MongoDB
+     * @param uri URI del post
+     * @param labels Conjunto de etiquetas a crear
+     */
+    async createLabelDocuments(uri: string, labels: Set<string>): Promise<void> {
+        try {
+            const client = await this.getClient();
+            const db = client.db();
+            const collection = db.collection('labels');
+
+            const documents = Array.from(labels).map(label => ({
+                uri,
+                label,
+                negated: false,
+                createdAt: new Date()
+            }));
+
+            await collection.insertMany(documents);
+            logger.info(`Created ${documents.length} label documents for URI: ${uri}`);
+        } catch (error) {
+            logger.error('Error creating label documents:', error);
             throw error;
         }
     }
 
     /**
-     * Crea documentos de negación para un conjunto de etiquetas
+     * Crea documentos de negación de etiquetas en MongoDB
+     * @param uri URI del post
+     * @param labels Conjunto de etiquetas a negar
      */
-    async createNegationDocuments(did: string, labels: Set<string>): Promise<void> {
+    async createNegationDocuments(uri: string, labels: Set<string>): Promise<void> {
         try {
-            const negatePromises = Array.from(labels).map(label =>
-                new Label({
-                    uri: did,
-                    val: label,
-                    neg: true,
-                    cts: new Date()
-                }).save()
-            );
-            
-            await Promise.all(negatePromises);
-            logger.info(`Created negation documents for labels: ${Array.from(labels).join(', ')}`);
+            const client = await this.getClient();
+            const db = client.db();
+            const collection = db.collection('labels');
+
+            const documents = Array.from(labels).map(label => ({
+                uri,
+                label,
+                negated: true,
+                createdAt: new Date()
+            }));
+
+            await collection.insertMany(documents);
+            logger.info(`Created ${documents.length} negation documents for URI: ${uri}`);
         } catch (error) {
             logger.error('Error creating negation documents:', error);
             throw error;
@@ -77,23 +84,39 @@ export class LabelService {
     }
 
     /**
-     * Crea documentos para un conjunto de etiquetas
+     * Obtiene las etiquetas actuales para un URI
+     * @param uri URI del post
+     * @returns Conjunto de etiquetas
      */
-    async createLabelDocuments(did: string, labels: Set<string>): Promise<void> {
+    async getCurrentLabels(uri: string): Promise<Set<string>> {
         try {
-            const createPromises = Array.from(labels).map(label =>
-                new Label({
-                    uri: did,
-                    val: label,
-                    neg: false,
-                    cts: new Date()
-                }).save()
-            );
-            
-            await Promise.all(createPromises);
-            logger.info(`Created label documents for labels: ${Array.from(labels).join(', ')}`);
+            const client = await this.getClient();
+            const db = client.db();
+            const collection = db.collection('labels');
+
+            // Obtener las etiquetas más recientes para cada label
+            const pipeline = [
+                { $match: { uri } },
+                { $sort: { createdAt: -1 } },
+                {
+                    $group: {
+                        _id: '$label',
+                        negated: { $first: '$negated' }
+                    }
+                },
+                {
+                    $match: {
+                        negated: false // Solo incluir etiquetas no negadas
+                    }
+                }
+            ];
+
+            const result = await collection.aggregate(pipeline).toArray();
+            const labels = new Set(result.map(doc => doc._id));
+            logger.info(`Retrieved ${labels.size} labels for URI: ${uri}`);
+            return labels;
         } catch (error) {
-            logger.error('Error creating label documents:', error);
+            logger.error('Error getting current labels:', error);
             throw error;
         }
     }
