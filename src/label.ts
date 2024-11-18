@@ -1,11 +1,10 @@
-import { ComAtprotoLabelDefs } from '@atproto/api';
+import { MongoDBLabelerServer } from './server/mongodbLabelerServer.js';
 import { DID, SIGNING_KEY } from './config.js';
 import { DELETE, LABELS } from './constants.js';
 import logger from './logger.js';
 import { LabelService } from './services/labelService.js';
-import { CustomLabelerServer } from './server/customLabelerServer.js';
 
-export const labelerServer = new CustomLabelerServer({ did: DID, signingKey: SIGNING_KEY });
+export const labelerServer = new MongoDBLabelerServer({ did: DID, signingKey: SIGNING_KEY });
 const labelService = new LabelService();
 
 async function deleteAllLabels(did: string, labels: Set<string>) {

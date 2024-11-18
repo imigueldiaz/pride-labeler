@@ -7,26 +7,47 @@ export class LabelService {
      */
     async getCurrentLabels(did: string): Promise<Set<string>> {
         try {
-            const query = await Label.find({ uri: did }).sort({ cts: -1 });
-            const labels = new Set<string>();
-
-            for (const label of query) {
-                if (label.val) {
-                    if (!label.neg) {
-                        labels.add(label.val);
-                        logger.info(`Added label: ${label.val}`);
-                    } else {
-                        labels.delete(label.val);
-                        logger.info(`Deleted label: ${label.val}`);
+            // Obtener las etiquetas más recientes para cada valor, ordenadas por fecha
+            const labels = await Label.aggregate([
+                // Filtrar por el DID específico
+                { $match: { uri: did } },
+                // Agrupar por valor de etiqueta y obtener el documento más reciente
+                {
+                    $group: {
+                        _id: "$val",
+                        latestDoc: { $first: "$$ROOT" },
+                        latestDate: { $max: "$cts" }
                     }
+                },
+                // Filtrar solo las etiquetas activas (no negadas)
+                { $match: { "latestDoc.neg": false } },
+                // Proyectar solo los campos necesarios
+                {
+                    $project: {
+                        _id: 0,
+                        val: "$latestDoc.val",
+                        uri: "$latestDoc.uri",
+                        cts: "$latestDoc.cts"
+                    }
+                }
+            ]);
+
+            // Convertir los resultados a un Set de valores
+            const activeLabels = new Set<string>();
+            for (const label of labels) {
+                if (label.val) {
+                    activeLabels.add(label.val);
+                    logger.info(`Active label found: ${label.val}`);
                 }
             }
 
-            if (labels.size > 0) {
-                logger.info(`Current labels: ${Array.from(labels).join(', ')}`);
+            if (activeLabels.size > 0) {
+                logger.info(`Current active labels: ${Array.from(activeLabels).join(', ')}`);
+            } else {
+                logger.info(`No active labels found for ${did}`);
             }
 
-            return labels;
+            return activeLabels;
         } catch (error) {
             logger.error('Error fetching labels:', error);
             throw error;
@@ -48,6 +69,7 @@ export class LabelService {
             );
             
             await Promise.all(negatePromises);
+            logger.info(`Created negation documents for labels: ${Array.from(labels).join(', ')}`);
         } catch (error) {
             logger.error('Error creating negation documents:', error);
             throw error;
@@ -69,6 +91,7 @@ export class LabelService {
             );
             
             await Promise.all(createPromises);
+            logger.info(`Created label documents for labels: ${Array.from(labels).join(', ')}`);
         } catch (error) {
             logger.error('Error creating label documents:', error);
             throw error;
