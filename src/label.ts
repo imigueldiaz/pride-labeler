@@ -55,7 +55,7 @@ async function addOrUpdateLabel(did: string, rkey: string, currentLabels: Set<st
     }
 
     // Luego crear todas las etiquetas de una vez
-    await labelService.createLabelDocuments(did, allLabels);
+    await labelService.createLabelDocuments(did, Array.from(allLabels));
     labelerServer.createLabels({ uri: did }, { create: Array.from(allLabels) });
     logger.info(`Successfully labeled ${did} with all labels: ${Array.from(allLabels).join(', ')}`);
   } catch (error) {

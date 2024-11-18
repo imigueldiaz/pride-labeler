@@ -74,26 +74,42 @@ export class LabelService {
 
     /**
      * Crea documentos de etiquetas en MongoDB
-     * @param uri URI del post
-     * @param labels Conjunto de etiquetas a crear
      */
-    async createLabelDocuments(uri: string, labels: Set<string>): Promise<void> {
+    async createLabelDocuments(
+        uri: string,
+        labels: string[],
+        negated: boolean = false
+    ): Promise<void> {
         try {
+            logger.info(`Creating label documents for URI: ${uri}`);
+            logger.info('Labels:', labels);
+            logger.info('Negated:', negated);
+
             const client = await this.getClient();
             const db = client.db('test');
             const collection = db.collection('labels');
 
-            const documents = Array.from(labels).map(label => ({
+            const documents = labels.map(label => ({
                 uri,
                 label,
-                negated: false,
-                createdAt: new Date()
+                negated,
+                createdAt: new Date(),
+                val: "0.5" // Valor por defecto para la confianza
             }));
 
-            await collection.insertMany(documents);
-            logger.info(`Created ${documents.length} label documents for URI: ${uri}`);
+            logger.info('Documents to insert:', JSON.stringify(documents, null, 2));
+
+            const result = await collection.insertMany(documents);
+            logger.info(`Successfully inserted ${result.insertedCount} documents`);
+
+            // Verificar los documentos insertados
+            const inserted = await collection.find({
+                _id: { $in: Object.values(result.insertedIds) }
+            }).toArray();
+            logger.info('Inserted documents:', JSON.stringify(inserted, null, 2));
+
         } catch (error) {
-            logger.error('Error creating label documents:', error);
+            logger.error('Error creating label documents:', error instanceof Error ? error.stack : error);
             throw error;
         }
     }
@@ -131,10 +147,10 @@ export class LabelService {
      */
     async getCurrentLabels(uri?: string): Promise<Set<string>> {
         try {
-            logger.info('Getting current labels...');
+            logger.info(`Getting current labels${uri ? ` for URI: ${uri}` : ''}`);
             const client = await this.getClient();
             logger.info('Got MongoDB client, getting database...');
-            const db = client.db('test');
+            const db = client.db('test'); // Asegurarnos de que estamos usando la base de datos correcta
             logger.info('Got database, getting collection...');
             const collection = db.collection('labels');
             logger.info('Got collection, preparing pipeline...');
@@ -154,17 +170,26 @@ export class LabelService {
                 {
                     $group: {
                         _id: '$label',
-                        negated: { $first: '$negated' }
+                        negated: { $first: '$negated' },
+                        createdAt: { $first: '$createdAt' }
                     }
                 },
                 {
                     $match: {
-                        negated: false // Solo incluir etiquetas no negadas
+                        negated: { $ne: true } // Solo incluir etiquetas no negadas
                     }
+                },
+                {
+                    $sort: { createdAt: -1 }
                 }
             );
 
             logger.info('Executing aggregation pipeline:', JSON.stringify(pipeline, null, 2));
+            
+            // Primero verificar si hay documentos en la colección
+            const count = await collection.countDocuments();
+            logger.info(`Total documents in collection: ${count}`);
+
             const result = await collection.aggregate(pipeline).toArray();
             logger.info('Raw aggregation results:', JSON.stringify(result, null, 2));
             

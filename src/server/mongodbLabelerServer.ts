@@ -1,4 +1,4 @@
-import { LabelerServer } from '@skyware/labeler';
+import { LabelerServer, SavedLabel } from '@skyware/labeler';
 import { LabelService } from '../services/labelService.js';
 import logger from '../logger.js';
 import { FastifyRequest } from 'fastify';
@@ -23,7 +23,7 @@ interface CreateLabelsParams {
  */
 export class MongoDBLabelerServer extends LabelerServer {
     private labelService: LabelService;
-    private pendingLabels: Map<string, Promise<ComAtprotoLabelDefs.Label[]>> = new Map();
+    private pendingLabels: Map<string, Promise<SavedLabel[]>> = new Map();
 
     constructor(options: { did: string; signingKey: string }) {
         super(options);
@@ -41,98 +41,143 @@ export class MongoDBLabelerServer extends LabelerServer {
      */
     private async handleQueryLabels(request: FastifyRequest): Promise<{ cursor: string; labels: ComAtprotoLabelDefs.Label[] }> {
         try {
-            logger.info('Handling queryLabels request...');
-            const { uri } = request.query as QueryLabelsParams;
-            logger.info(`Query parameters - URI: ${uri || 'not provided'}`);
+            const { uri } = request.query as { uri?: string };
+            logger.info(`Handling queryLabels request${uri ? ` for URI: ${uri}` : ''}`);
 
-            logger.info('Calling labelService.getCurrentLabels...');
-            const labels = await this.labelService.getCurrentLabels(uri);
-            logger.info(`Got ${labels.size} labels from service`);
+            // Obtener las etiquetas actuales
+            const currentLabels = await this.labelService.getCurrentLabels(uri);
+            logger.info('Current labels:', Array.from(currentLabels));
 
-            logger.info('Converting labels to AT Protocol format...');
-            const labelObjects = Array.from(labels).map(val => {
-                const label = {
-                    src: this.did as `did:${string}`,
-                    uri: uri || '*',
-                    val: val,
-                    cts: new Date().toISOString()
-                };
-                logger.info('Created label object:', label);
-                return label;
-            });
+            // Convertir las etiquetas al formato requerido
+            const labels: ComAtprotoLabelDefs.Label[] = Array.from(currentLabels).map(label => ({
+                src: this.did,
+                uri: uri || '',
+                val: label,
+                neg: false,
+                cts: new Date().toISOString(),
+                exp: undefined,
+            }));
 
-            const response = {
-                cursor: '0',
-                labels: labelObjects
+            logger.info('Transformed labels:', JSON.stringify(labels, null, 2));
+
+            return {
+                cursor: new Date().getTime().toString(),
+                labels,
             };
-            logger.info('Sending response:', JSON.stringify(response, null, 2));
-            return response;
         } catch (error) {
-            logger.error('Error querying labels:', error);
+            logger.error('Error handling queryLabels:', error instanceof Error ? error.stack : error);
             throw error;
         }
     }
 
     /**
-     * Sobrescribe el método createLabels del servidor base.
-     * Este método es llamado cuando se hace una petición POST a /xrpc/com.atproto.label.createLabels
-     * 
-     * Para mantener la compatibilidad con el servidor base, que espera un array síncrono,
-     * guardamos la promesa en un Map y devolvemos un array vacío. La promesa se resolverá
-     * más tarde y los resultados estarán disponibles a través de queryLabels.
+     * Crea etiquetas para un URI dado
      */
-    override createLabels(subject: { uri: string; cid?: string }, labels: { create?: string[]; negate?: string[] }): { src: `did:${string}`; uri: string; cid?: string; val: string; cts: string; neg?: boolean; sig: ArrayBuffer; id: number }[] {
+    override createLabels(
+        subject: { uri: string; cid?: string },
+        labels: { create?: string[]; negate?: string[] }
+    ): SavedLabel[] {
         const { uri } = subject;
+        const { create = [], negate = [] } = labels;
+
+        // Convertir las etiquetas al formato SavedLabel
+        const labelObjects: SavedLabel[] = [
+            ...create.map((val, index) => ({
+                src: this.did as `did:${string}`,
+                uri,
+                cid: subject.cid,
+                val,
+                neg: false,
+                cts: new Date().toISOString(),
+                sig: new Uint8Array(),
+                id: index
+            })),
+            ...negate.map((val, index) => ({
+                src: this.did as `did:${string}`,
+                uri,
+                cid: subject.cid,
+                val,
+                neg: true,
+                cts: new Date().toISOString(),
+                sig: new Uint8Array(),
+                id: create.length + index
+            }))
+        ];
 
         // Crear una promesa para procesar las etiquetas
-        const promise = this.processLabels(subject, labels);
+        const promise = this.processLabels(labelObjects, uri);
         
         // Guardar la promesa para su resolución posterior
         this.pendingLabels.set(uri, promise);
 
-        // Devolver un array vacío ya que los resultados estarán disponibles a través de queryLabels
-        return [];
+        // Devolver las etiquetas creadas
+        return labelObjects;
     }
 
     /**
-     * Procesa las etiquetas de forma asíncrona.
-     * @param subject El sujeto de las etiquetas
-     * @param labels Las etiquetas a procesar
+     * Procesa las etiquetas recibidas
      */
-    private async processLabels(subject: { uri: string; cid?: string }, labels: { create?: string[]; negate?: string[] }): Promise<ComAtprotoLabelDefs.Label[]> {
+    protected async processLabels(
+        labels: SavedLabel[],
+        uri: string
+    ): Promise<SavedLabel[]> {
         try {
-            const { uri } = subject;
-            const { create, negate } = labels;
+            logger.info(`Processing labels for URI: ${uri}`);
+            logger.info('Labels received:', JSON.stringify(labels, null, 2));
 
-            if (!uri) {
-                throw new Error('URI parameter is required');
+            // Agrupar etiquetas por negadas y no negadas
+            const negatedLabels = new Set<string>();
+            const nonNegatedLabels = new Set<string>();
+
+            labels.forEach(label => {
+                if (label.neg) {
+                    negatedLabels.add(label.val);
+                } else {
+                    nonNegatedLabels.add(label.val);
+                }
+            });
+
+            logger.info('Negated labels:', Array.from(negatedLabels));
+            logger.info('Non-negated labels:', Array.from(nonNegatedLabels));
+
+            // Procesar etiquetas negadas
+            if (negatedLabels.size > 0) {
+                await this.labelService.createLabelDocuments(
+                    uri,
+                    Array.from(negatedLabels),
+                    true // negated = true
+                );
             }
 
-            // Procesar etiquetas a negar primero
-            if (negate?.length) {
-                await this.labelService.createNegationDocuments(uri, new Set(negate));
+            // Procesar etiquetas no negadas
+            if (nonNegatedLabels.size > 0) {
+                await this.labelService.createLabelDocuments(
+                    uri,
+                    Array.from(nonNegatedLabels),
+                    false // negated = false
+                );
             }
 
-            // Luego procesar etiquetas a crear
-            if (create?.length) {
-                await this.labelService.createLabelDocuments(uri, new Set(create));
-            }
-
-            // Obtener las etiquetas actuales
-            const currentLabels = await this.labelService.getCurrentLabels(uri);
-            
-            // Convertir las etiquetas a Label con todos los campos requeridos
-            return Array.from(currentLabels).map(val => ({
-                src: this.did as `did:${string}`,
-                uri: uri,
-                cid: subject.cid,
-                val: val,
-                cts: new Date().toISOString(),
-                neg: false,
-                sig: new Uint8Array()
-            }));
+            logger.info('Successfully processed all labels');
+            return labels; // Devolver las etiquetas procesadas
         } catch (error) {
-            logger.error('Error processing labels:', error);
+            logger.error('Error processing labels:', error instanceof Error ? error.stack : error);
+            throw error;
+        }
+    }
+
+    /**
+     * Crea etiquetas para un post
+     */
+    private async handleCreateLabels(labels: Set<string>, uri: string): Promise<void> {
+        try {
+            logger.info(`Creating labels for URI: ${uri}`);
+            logger.info('Labels:', Array.from(labels));
+
+            // Convertir Set a Array antes de pasar a createLabelDocuments
+            await this.labelService.createLabelDocuments(uri, Array.from(labels));
+        } catch (error) {
+            logger.error('Error creating labels:', error instanceof Error ? error.stack : error);
             throw error;
         }
     }
