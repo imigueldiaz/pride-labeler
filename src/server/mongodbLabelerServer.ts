@@ -15,6 +15,14 @@ export class MongoDBLabelerServer extends LabelerServer {
     constructor(options: { did: string; signingKey: string }) {
         super(options);
         this.labelService = new LabelService();
+
+        // Deshabilitar SQLite estableciendo db como un objeto vacío
+        (this as any).db = {};
+
+        // Sobrescribir el handler de queryLabels
+        this.queryLabelsHandler = this.handleQueryLabels.bind(this);
+
+        logger.info('MongoDBLabelerServer initialized');
     }
 
     /**
@@ -26,6 +34,10 @@ export class MongoDBLabelerServer extends LabelerServer {
     ): SavedLabel[] {
         const { uri } = subject;
         const { create = [], negate = [] } = labels;
+
+        logger.info(`Creating labels for URI: ${uri}`);
+        logger.info('Create labels:', create);
+        logger.info('Negate labels:', negate);
 
         // Convertir las etiquetas al formato SavedLabel
         const labelObjects: SavedLabel[] = [
@@ -50,6 +62,8 @@ export class MongoDBLabelerServer extends LabelerServer {
                 id: create.length + index
             }))
         ];
+
+        logger.info('Created label objects:', JSON.stringify(labelObjects, null, 2));
 
         // Crear una promesa para procesar las etiquetas
         const promise = this.processLabels(labelObjects, uri);

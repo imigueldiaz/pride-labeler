@@ -1,11 +1,10 @@
 import { CommitCreateEvent, Jetstream } from '@skyware/jetstream';
 import fs from 'node:fs';
 
-import { CURSOR_UPDATE_INTERVAL, DID, FIREHOSE_URL, METRICS_PORT, PORT, WANTED_COLLECTION,SIGNING_KEY } from './config.js';
+import { CURSOR_UPDATE_INTERVAL, DID, FIREHOSE_URL, METRICS_PORT, PORT, WANTED_COLLECTION, SIGNING_KEY } from './config.js';
 import { label, labelerServer } from './label.js';
 import logger from './logger.js';
 import { startMetricsServer } from './metrics.js';
-import { LabelerServer } from '@skyware/labeler';
 import { connectDB, disconnectDB } from './db/connection.js';
 
 let cursor = 0;
@@ -76,14 +75,13 @@ jetstream.onCreate(WANTED_COLLECTION, (event: CommitCreateEvent<typeof WANTED_CO
 
 const metricsServer = startMetricsServer(METRICS_PORT);
 
-const server = new LabelerServer({
-  did: DID,
-  signingKey: SIGNING_KEY,
-});
-
-server.app.listen({ port: PORT, host: "0.0.0.0" }, (error, address) => {
-  if (error) console.error(error);
-  else console.log(`Labeler server listening on ${address}`);
+// Usar el labelerServer importado de label.ts que ya es una instancia de MongoDBLabelerServer
+labelerServer.app.listen({ port: PORT, host: "0.0.0.0" }, (error, address) => {
+  if (error) {
+    logger.error('Error starting labeler server:', error);
+  } else {
+    logger.info(`Labeler server listening on ${address}`);
+  }
 });
 
 jetstream.start();
