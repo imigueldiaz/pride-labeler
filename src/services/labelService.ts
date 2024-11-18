@@ -27,29 +27,31 @@ export class LabelService {
     /**
      * Obtiene el cliente de MongoDB, creando uno nuevo si es necesario
      */
-    private async getClient(): Promise<MongoClient> {
+    async getClient(): Promise<MongoClient> {
         try {
             // Si ya tenemos un cliente conectado, verificar que funciona
             if (this.client) {
                 try {
+                    logger.info('Testing existing MongoDB client connection...');
                     await this.client.db('admin').command({ ping: 1 });
-                    logger.info('Using existing MongoDB client connection');
+                    logger.info('Existing MongoDB client connection is responsive');
                     return this.client;
                 } catch (pingError) {
-                    logger.warn('Existing client connection is not responsive, will create new connection:', pingError);
+                    logger.warn('Existing client connection is not responsive:', pingError);
                     await this.client.close().catch(err => logger.warn('Error closing unresponsive client:', err));
                     this.client = null;
                 }
             }
 
             // Intentar conectar usando la conexión global de mongoose
+            logger.info('Creating new MongoDB connection...');
             await connectDB();
             const MONGODB_URI = process.env.MONGODB_URI;
             if (!MONGODB_URI) {
                 throw new Error('MONGODB_URI environment variable is not defined');
             }
 
-            logger.info('Creating new MongoDB client...');
+            logger.info('Initializing new MongoDB client...');
             this.client = new MongoClient(MONGODB_URI, {
                 serverSelectionTimeoutMS: 10000,
                 socketTimeoutMS: 45000,
@@ -57,10 +59,24 @@ export class LabelService {
                 heartbeatFrequencyMS: 30000,
             });
 
+            logger.info('Connecting to MongoDB...');
             await this.client.connect();
+            
             // Verificar que la conexión funciona
+            logger.info('Testing new MongoDB client connection...');
             await this.client.db('admin').command({ ping: 1 });
-            logger.info('Successfully created and connected MongoDB client');
+            
+            // Listar bases de datos y colecciones
+            logger.info('Listing databases...');
+            const adminDb = this.client.db('admin');
+            const dbs = await adminDb.admin().listDatabases();
+            logger.info('Available databases:', dbs.databases.map(db => db.name));
+
+            const testDb = this.client.db('test');
+            const collections = await testDb.listCollections().toArray();
+            logger.info('Collections in test database:', collections.map(col => col.name));
+
+            logger.info('Successfully created and verified new MongoDB client connection');
             return this.client;
         } catch (error) {
             logger.error('Error getting MongoDB client:', error instanceof Error ? error.stack : error);

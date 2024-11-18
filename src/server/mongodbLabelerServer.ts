@@ -44,11 +44,19 @@ export class MongoDBLabelerServer extends LabelerServer {
             const { uri } = request.query as { uri?: string };
             logger.info(`Handling queryLabels request${uri ? ` for URI: ${uri}` : ''}`);
 
+            // Verificar la conexión antes de proceder
+            const client = await this.labelService.getClient();
+            logger.info('Got MongoDB client, verifying connection...');
+            await client.db('admin').command({ ping: 1 });
+            logger.info('MongoDB connection verified');
+
             // Obtener las etiquetas actuales
+            logger.info('Fetching current labels...');
             const currentLabels = await this.labelService.getCurrentLabels(uri);
             logger.info('Current labels:', Array.from(currentLabels));
 
             // Convertir las etiquetas al formato requerido
+            logger.info('Converting labels to AT Protocol format...');
             const labels: ComAtprotoLabelDefs.Label[] = Array.from(currentLabels).map(label => ({
                 src: this.did,
                 uri: uri || '',
@@ -60,10 +68,12 @@ export class MongoDBLabelerServer extends LabelerServer {
 
             logger.info('Transformed labels:', JSON.stringify(labels, null, 2));
 
-            return {
+            const response = {
                 cursor: new Date().getTime().toString(),
                 labels,
             };
+            logger.info('Sending response:', JSON.stringify(response, null, 2));
+            return response;
         } catch (error) {
             logger.error('Error handling queryLabels:', error instanceof Error ? error.stack : error);
             throw error;
