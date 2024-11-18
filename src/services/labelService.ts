@@ -10,7 +10,7 @@ interface ATLabel {
     val: string;
     neg: boolean;
     cts: Date;
-    sig: Buffer;
+    sig: Record<string, never>;  // {} tipo vacío
 }
 
 // Documento MongoDB que extiende los campos AT
@@ -19,12 +19,10 @@ interface MongoLabel extends ATLabel {
     id: number;
 }
 
-// Documento pendiente para reintentos
-interface PendingLabel {
-    _id?: ObjectId;
-    atLabel: ATLabel;
-    retryCount: number;
-    lastRetry?: Date;
+// Contador para IDs secuenciales
+interface Counter {
+    _id: string;
+    seq: number;
 }
 
 type MongoPipeline = {
@@ -42,6 +40,40 @@ const MAX_RETRY_COUNT = 3;
 const RETRY_DELAY_MS = 5000;
 
 export class LabelService {
+    private async getNextId(db: mongoose.mongo.Db): Promise<number> {
+        const countersCollection = db.collection<Counter>('counters');
+        
+        // Primero intentamos obtener el contador actual
+        const current = await countersCollection.findOne({ _id: 'labelId' as any });
+        
+        if (current) {
+            // Si existe, incrementamos y devolvemos
+            const result = await countersCollection.findOneAndUpdate(
+                { _id: 'labelId' as any },
+                { $inc: { seq: 1 } },
+                { returnDocument: 'after' }
+            );
+            return result?.seq || current.seq + 1;
+        }
+
+        // Si no existe, creamos uno nuevo
+        await countersCollection.insertOne({
+            _id: 'labelId' as any,
+            seq: 1
+        });
+
+        return 1;
+    }
+
+    private async ensureIndexes(db: mongoose.mongo.Db): Promise<void> {
+        const collection = db.collection('labels');
+        await collection.createIndex(
+            { uri: 1, val: 1, neg: 1 },
+            { unique: true }
+        );
+        logger.info('Ensured unique index on {uri, val, neg}');
+    }
+
     async getDatabase() {
         try {
             logger.info('Getting MongoDB database connection...');
@@ -56,6 +88,7 @@ export class LabelService {
                 throw new Error('Database connection is undefined');
             }
 
+            await this.ensureIndexes(db);
             return db;
         } catch (error) {
             logger.error('Error getting MongoDB database:', error instanceof Error ? error.stack : error);
@@ -80,7 +113,11 @@ export class LabelService {
                 { $sort: { cts: -1 } },
                 {
                     $group: {
-                        _id: '$val',
+                        _id: {
+                            val: '$val',
+                            uri: '$uri'
+                        },
+                        val: { $first: '$val' },
                         uri: { $first: '$uri' },
                         src: { $first: '$src' },
                         neg: { $first: '$neg' },
@@ -98,10 +135,14 @@ export class LabelService {
 
             logger.info('Executing aggregation pipeline:', JSON.stringify(pipeline, null, 2));
             const result = await collection.aggregate<MongoLabel>(pipeline).toArray();
-            logger.info('Raw aggregation results:', JSON.stringify(result, null, 2));
 
-            // Extraer las etiquetas únicas
-            const labels = new Set(result.map(doc => doc._id).filter(Boolean));
+            // Extraer las etiquetas únicas (no negadas)
+            const labels = new Set(
+                result
+                    .filter(doc => !doc.neg)
+                    .map(doc => doc.val)
+                    .filter(Boolean)
+            );
             logger.info(`Retrieved ${labels.size} unique labels${uri ? ` for URI: ${uri}` : ''}`);
             logger.info('Labels:', Array.from(labels));
 
@@ -118,11 +159,24 @@ export class LabelService {
             const db = await this.getDatabase();
             const collection = db.collection('labels');
 
-            // Obtener todos los documentos ordenados por fecha de creación
-            const documents = await collection
-                .find({})
-                .sort({ cts: -1 })
-                .toArray();
+            // Obtener documentos únicos por {uri, val, neg}
+            const pipeline = [
+                { $sort: { cts: -1 } },
+                {
+                    $group: {
+                        _id: {
+                            uri: '$uri',
+                            val: '$val',
+                            neg: '$neg'
+                        },
+                        doc: { $first: '$$ROOT' }
+                    }
+                },
+                { $replaceRoot: { newRoot: '$doc' } },
+                { $sort: { id: 1 } }
+            ];
+
+            const documents = await collection.aggregate(pipeline).toArray();
 
             // Convertir los documentos al tipo MongoLabel
             const result = documents.map(doc => ({
@@ -133,12 +187,10 @@ export class LabelService {
                 val: doc.val,
                 neg: doc.neg,
                 cts: new Date(doc.cts),
-                sig: doc.sig
+                sig: {} // Siempre retornar un objeto vacío
             })) as MongoLabel[];
 
-            logger.info(`Retrieved ${result.length} labels with metadata`);
-            logger.info('Labels with metadata:', JSON.stringify(result, null, 2));
-
+            logger.info(`Retrieved ${result.length} unique labels with metadata`);
             return result;
         } catch (error) {
             logger.error('Error getting labels with metadata:', error instanceof Error ? error.stack : error);
@@ -153,93 +205,43 @@ export class LabelService {
 
             const db = await this.getDatabase();
             const collection = db.collection('labels');
-            const pendingCollection = db.collection('pending_labels');
 
-            // Crear documentos AT
+            // Crear documentos AT con objeto vacío para sig
             const atLabels: ATLabel[] = labels.map(label => ({
                 src: 'did:plc:6mjpba7ftd6yljjgvhwgj46p',
                 uri,
                 val: label,
                 neg: negated,
                 cts: new Date(),
-                sig: Buffer.from([])
+                sig: {}
             }));
-
-            // Crear documentos pendientes
-            const pendingLabels: PendingLabel[] = atLabels.map(atLabel => ({
-                atLabel,
-                retryCount: 0
-            }));
-
-            // Guardar en la colección de pendientes
-            const pendingResult = await pendingCollection.insertMany(pendingLabels);
-            const pendingIds = Object.values(pendingResult.insertedIds);
-            logger.info('Saved to pending collection:', JSON.stringify(pendingLabels, null, 2));
 
             try {
-                // Crear documentos MongoDB
-                const documents = atLabels.map((atLabel, index) => ({
-                    id: index,
-                    ...atLabel
-                }));
+                // Crear documentos MongoDB con IDs únicos
+                const documents = await Promise.all(
+                    atLabels.map(async (atLabel) => ({
+                        id: await this.getNextId(db),
+                        ...atLabel
+                    }))
+                );
 
-                logger.info('Inserting documents:', JSON.stringify(documents, null, 2));
-                const result = await collection.insertMany(documents);
-                logger.info(`Successfully inserted ${result.insertedCount} documents`);
-
-                // Eliminar de pendientes
-                await pendingCollection.deleteMany({ _id: { $in: pendingIds } });
-                logger.info('Documents removed from pending');
+                // Usar updateOne con upsert para evitar duplicados
+                for (const doc of documents) {
+                    await collection.updateOne(
+                        { uri: doc.uri, val: doc.val, neg: doc.neg },
+                        { $set: doc },
+                        { upsert: true }
+                    );
+                }
+                logger.info(`Successfully processed ${documents.length} documents`);
 
             } catch (error) {
-                logger.error('Error processing labels, will retry later:', error instanceof Error ? error.stack : error);
-                // Los documentos pendientes permanecen para retry posterior
+                logger.error('Error processing labels:', error instanceof Error ? error.stack : error);
+                throw error;
             }
         } catch (error) {
             logger.error('Error creating label documents:', error instanceof Error ? error.stack : error);
             throw error;
-        }
-    }
-
-    async processPendingLabels(): Promise<void> {
-        try {
-            const db = await this.getDatabase();
-            const pendingCollection = db.collection('pending_labels');
-            const labelsCollection = db.collection('labels');
-
-            const pendingLabels = await pendingCollection
-                .find({ retryCount: { $lt: MAX_RETRY_COUNT } })
-                .toArray();
-
-            for (const pending of pendingLabels) {
-                try {
-                    logger.info('Processing pending label:', JSON.stringify(pending, null, 2));
-
-                    const document = {
-                        id: 0, // Se asignará un nuevo ID
-                        ...pending.atLabel
-                    };
-
-                    await labelsCollection.insertOne(document);
-                    await pendingCollection.deleteOne({ _id: pending._id });
-                    logger.info('Successfully processed pending label');
-
-                } catch (error) {
-                    logger.error('Error processing pending label:', error instanceof Error ? error.stack : error);
-                    await pendingCollection.updateOne(
-                        { _id: pending._id },
-                        { 
-                            $inc: { retryCount: 1 },
-                            $set: { lastRetry: new Date() }
-                        }
-                    );
-                }
-
-                // Esperar antes de procesar el siguiente
-                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-            }
-        } catch (error) {
-            logger.error('Error processing pending labels:', error instanceof Error ? error.stack : error);
         }
     }
 

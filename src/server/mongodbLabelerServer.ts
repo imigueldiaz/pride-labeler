@@ -56,7 +56,7 @@ export class MongoDBLabelerServer extends LabelerServer {
                 val: label.val,
                 neg: label.neg || false,
                 cts: new Date().toISOString(),
-                sig: new Uint8Array(),
+                sig: new Uint8Array(), // Para la API mantenemos Uint8Array vacío
                 id: this.getNextId()
             };
 
@@ -158,26 +158,24 @@ export class MongoDBLabelerServer extends LabelerServer {
 
             // Obtener todas las etiquetas con metadatos
             const labelsWithMetadata = await this.labelService.getAllLabelsWithMetadata();
-            logger.info('Labels with metadata:', JSON.stringify(labelsWithMetadata, null, 2));
 
             // Convertir al formato SavedLabel y asignar IDs secuenciales
-            const labels: SavedLabel[] = labelsWithMetadata.map((label, index) => ({
+            const labels: SavedLabel[] = labelsWithMetadata.map(label => ({
                 src: label.src as `did:${string}`,
                 uri: label.uri,
                 val: label.val,
                 neg: label.neg,
                 cts: new Date(label.cts).toISOString(),
-                sig: Buffer.isBuffer(label.sig) ? new Uint8Array(label.sig) : new Uint8Array(),
-                id: label.id || this.getNextId()
+                sig: new Uint8Array(), // Para la API mantenemos Uint8Array vacío
+                id: label.id
             }));
 
-            logger.info('Transformed labels:', JSON.stringify(labels, null, 2));
-
+            // Filtrar por URI si se especifica
             const response = {
                 cursor: new Date().getTime().toString(),
                 labels: labels.filter(label => !uri || label.uri === uri),
             };
-            logger.info('Sending response:', JSON.stringify(response, null, 2));
+
             return response;
         } catch (error) {
             logger.error('Error handling queryLabels:', error instanceof Error ? error.stack : error);

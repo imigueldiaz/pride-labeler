@@ -7,10 +7,7 @@ const labelSchema = new mongoose.Schema({
     val: { type: String, required: true },
     neg: { type: Boolean, required: true, default: false },
     cts: { type: Date, required: true, default: Date.now },
-    sig: {
-        $bytes: String
-    },
-    ver: Number
+    sig: { type: Map, of: String, default: () => ({}) }
 }, {
     timestamps: true
 });
