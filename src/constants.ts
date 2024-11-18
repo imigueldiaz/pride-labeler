@@ -5,7 +5,7 @@ export const LABEL_LIMIT = 0; // 0 significa sin límite de etiquetas
 export const LABELS: Label[] = [
   // Orientaciones Sexuales Principales
   {
-    rkey: '3lb4xfigg652t',
+    rkey: '3lb7gjf3ugi2v',
     identifier: 'lesbian',
     locales: [
       { lang: 'es', name: 'Lesbiana 🏳️‍🌈', description: 'Persona que se alinea con la feminidad y siente atracción sexual hacia otras personas que se alinean con la feminidad'},
@@ -16,7 +16,7 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfijnlx2d',
+    rkey: '3lb7gjeanud2c',
     identifier: 'gay',
     locales: [
       { lang: 'es', name: 'Gay 🏳️‍🌈', description: 'Persona que se alinea con la masculinidad y siente atracción sexual hacia otras personas que se alinean con la masculinidad'},
@@ -27,18 +27,18 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfindf426',
+    rkey: '3lb7gjfbz9g2e',
     identifier: 'bisexual',
     locales: [
-      { lang: 'es', name: 'Bisexual 💗💜💙', description: 'Persona que siente atracción sexual hacia personas de todo el espectro de género'},
-      { lang: 'en', name: 'Bisexual 💗💜💙', description: 'Person who experiences sexual attraction to people across the gender spectrum'},
-      { lang: 'de', name: 'Bisexuell 💗💜💙', description: 'Person, die sexuelle Anziehung zu Menschen über das gesamte Geschlechterspektrum hinweg empfindet'},
-      { lang: 'fr', name: 'Bisexuel·le 💗💜💙', description: 'Personne qui ressent une attirance sexuelle envers des personnes de tout le spectre des genres'},
-      { lang: 'ja', name: 'バイセクシュアル 💗💜💙', description: 'ジェンダースペクトラム全体の人々に性的な魅力を感じる人'}
+      { lang: 'es', name: 'Bisexual 💗💜💙', description: 'Persona que siente atracción sexual hacia personas de más de un género'},
+      { lang: 'en', name: 'Bisexual 💗💜💙', description: 'Person who experiences sexual attraction to people of more than one gender'},
+      { lang: 'de', name: 'Bisexuell 💗💜💙', description: 'Person, die sexuelle Anziehung zu Menschen mehrerer Geschlechter empfindet'},
+      { lang: 'fr', name: 'Bisexuel·le 💗💜💙', description: 'Personne qui ressent une attirance sexuelle envers des personnes de plus d\'un genre'},
+      { lang: 'ja', name: 'バイセクシャル 💗💜💙', description: '複数の性別の人々に性的な魅力を感じる人'}
     ]
   },
   {
-    rkey: '3lb4xfiqrfl22',
+    rkey: '3lb7gjfhpv22g',
     identifier: 'pansexual',
     locales: [
       { lang: 'es', name: 'Pansexual 💗💛💙', description: 'Persona que siente atracción sexual hacia otras personas independientemente de su expresión o identidad de género'},
@@ -48,9 +48,8 @@ export const LABELS: Label[] = [
       { lang: 'ja', name: 'パンセクシュアル 💗💛💙', description: 'ジェンダー表現やアイデンティティに関係なく性的な魅力を感じる人'}
     ]
   },
-  // Identidades de Género
   {
-    rkey: '3lb4xfiu4nf2t',
+    rkey: '3lb7gjfkrv22i',
     identifier: 'transgender',
     locales: [
       { lang: 'es', name: 'Trans 🏳️‍⚧️', description: 'Persona cuya identidad de género difiere del sexo que le fue asignado al nacer'},
@@ -61,18 +60,18 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfixjmd27',
+    rkey: '3lb7gjfnwvg2k',
     identifier: 'nonbinary',
     locales: [
       { lang: 'es', name: 'No Binario 🏳️‍⚧️', description: 'Persona cuya identidad de género existe fuera o entre las categorías tradicionales de género'},
       { lang: 'en', name: 'Non-Binary 🏳️‍⚧️', description: 'Person whose gender identity exists outside or between traditional gender categories'},
-      { lang: 'de', name: 'Nichtbinär 🏳️‍⚧️', description: 'Person, deren Geschlechtsidentität außerhalb oder zwischen traditionellen Geschlechterkategorien existiert'},
+      { lang: 'de', name: 'Nichtbinär 🏳️‍⚧️', description: 'Person, deren Geschlechtsidentität außerhalb oder zwischen traditionellen Geschlechterkategorien liegt'},
       { lang: 'fr', name: 'Non-Binaire 🏳️‍⚧️', description: 'Personne dont l\'identité de genre existe en dehors ou entre les catégories traditionnelles de genre'},
-      { lang: 'ja', name: 'ノンバイナリー 🏳️‍⚧️', description: '従来の性別区分の外側または間に存在するジェンダーアイデンティティを持つ人'}
+      { lang: 'ja', name: 'ノンバイナリー 🏳️‍⚧️', description: '伝統的な性別カテゴリーの外側または間に存在するジェンダーアイデンティティを持つ人'}
     ]
   },
   {
-    rkey: '3lb4xfj32rn25',
+    rkey: '3lb7gjfp9n62a',
     identifier: 'agender',
     locales: [
       { lang: 'es', name: 'Agénero 🏳️‍⚧️', description: 'Persona que no se identifica con ningún género'},
@@ -82,9 +81,8 @@ export const LABELS: Label[] = [
       { lang: 'ja', name: 'アゲンダー 🏳️‍⚧️', description: 'どのジェンダーにも同定しない人'}
     ]
   },
-  // Otras Identidades
   {
-    rkey: '3lb4xfj6cdo2a',
+    rkey: '3lb7gjfpm722a',
     identifier: 'queer',
     locales: [
       { lang: 'es', name: 'Queer 🏳️‍🌈', description: 'Persona que no se identifica con las normas tradicionales de género y sexualidad'},
@@ -95,7 +93,7 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfjbtot27',
+    rkey: '3lb7gjfqot27a',
     identifier: 'intersex',
     locales: [
       { lang: 'es', name: 'Intersex ⚧', description: 'Persona con características sexuales que no se ajustan a las definiciones típicas de masculino o femenino'},
@@ -107,7 +105,7 @@ export const LABELS: Label[] = [
   },
   // Espectro Asexual
   {
-    rkey: '3lb4xfjffx22v',
+    rkey: '3lb7gjfrfl22v',
     identifier: 'asexual',
     locales: [
       { lang: 'es', name: 'Asexual 🖤🤍💜', description: 'Persona que experimenta poca o ninguna atracción sexual'},
@@ -118,18 +116,18 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfjiuqx22',
+    rkey: '3lb7gjfsgx22v',
     identifier: 'demisexual',
     locales: [
       { lang: 'es', name: 'Demisexual 🖤💜', description: 'Persona que solo experimenta atracción sexual después de formar un vínculo emocional'},
       { lang: 'en', name: 'Demisexual 🖤💜', description: 'Person who only experiences sexual attraction after forming an emotional bond'},
-      { lang: 'de', name: 'Demisexuell 🖤💜', description: 'Person, die nur sexuelle Anziehung empfindet, nachdem sie eine emotionale Bindung aufgebaut hat'},
-      { lang: 'fr', name: 'Démisexuel·le 🖤💜', description: 'Personne qui ne ressent une attirance sexuelle qu\'après avoir formé un lien émotionnel'},
-      { lang: 'ja', name: 'デミセクシュアル 🖤💜', description: '感情的な絆を築いた後にのみ性的魅力を感じる人'}
+      { lang: 'de', name: 'Demisexuell 🖤💜', description: 'Person, die erst nach dem Aufbau einer emotionalen Bindung sexuelle Anziehung empfindet'},
+      { lang: 'fr', name: 'Demisexuel·le 🖤💜', description: 'Personne qui ne ressent une attirance sexuelle qu\'après avoir établi un lien émotionnel'},
+      { lang: 'ja', name: 'デミセクシャル 🖤💜', description: '感情的な絆を形成した後にのみ性的な魅力を感じる人'}
     ]
   },
   {
-    rkey: '3lb4xfjm5p62a',
+    rkey: '3lb7gjftx62a',
     identifier: 'graysexual',
     locales: [
       { lang: 'es', name: 'Grisexual 🖤', description: 'Persona que experimenta atracción sexual raramente o con baja intensidad'},
@@ -140,7 +138,7 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfjpml722',
+    rkey: '3lb7gjfum722v',
     identifier: 'aceflux',
     locales: [
       { lang: 'es', name: 'Aceflux 💜', description: 'Persona cuya atracción sexual fluctúa dentro del espectro asexual'},
@@ -152,7 +150,7 @@ export const LABELS: Label[] = [
   },
   // Espectro Arromántico
   {
-    rkey: '3lb4xfjswh525',
+    rkey: '3lb7gjfvw525',
     identifier: 'aromantic',
     locales: [
       { lang: 'es', name: 'Aromántico 💚🤍🖤', description: 'Persona que experimenta poca o ninguna atracción romántica hacia otras personas'},
@@ -163,7 +161,7 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfk8hj92m',
+    rkey: '3lb7gjfxhj92m',
     identifier: 'heteroromantic',
     locales: [
       { lang: 'es', name: 'Heterorromántico 💚❤️', description: 'Persona que siente atracción romántica hacia personas que se alinean con un género diferente al propio'},
@@ -174,18 +172,18 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfk9pq82n',
+    rkey: '3lb7gjfxpq82n',
     identifier: 'biromantic',
     locales: [
       { lang: 'es', name: 'Birromántico 💗💜💙', description: 'Persona que siente atracción romántica hacia personas de todo el espectro de género'},
       { lang: 'en', name: 'Biromantic 💗💜💙', description: 'Person who experiences romantic attraction to people across the gender spectrum'},
-      { lang: 'de', name: 'Biromantisch 💗💜💙', description: 'Person, die romantische Anziehung zu Menschen über das gesamte Geschlechterspektrum hinweg empfindet'},
-      { lang: 'fr', name: 'Birromantique 💗💜💙', description: 'Personne qui ressent une attirance romantique envers des personnes de tout le spectre des genres'},
-      { lang: 'ja', name: 'バイロマンティック 💗💜💙', description: 'ジェンダースペクトラム全体の人々にロマンチックな魅力を感じる人'}
+      { lang: 'de', name: 'Biromantisch 💗💜💙', description: 'Person, die romantische Anziehung zu Menschen verschiedener Geschlechter empfindet'},
+      { lang: 'fr', name: 'Biromantique 💗💜💙', description: 'Personne qui ressent une attirance romantique envers des personnes de tout le spectre des genres'},
+      { lang: 'ja', name: 'バイロマンティック 💗💜💙', description: '性別を超えて人々にロマンティックな魅力を感じる人'}
     ]
   },
   {
-    rkey: '3lb4xfkats72p',
+    rkey: '3lb7gjfyats72p',
     identifier: 'homoromantic',
     locales: [
       { lang: 'es', name: 'Homorromántico 🌈', description: 'Persona que siente atracción romántica hacia personas que se alinean con su mismo género'},
@@ -196,7 +194,7 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfjwbky2m',
+    rkey: '3lb7gjfzwbky2m',
     identifier: 'demiromantic',
     locales: [
       { lang: 'es', name: 'Demiromántico 💚', description: 'Persona que solo experimenta atracción romántica después de formar un vínculo emocional'},
@@ -207,7 +205,7 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfjzuak2v',
+    rkey: '3lb7gjfzuak2v',
     identifier: 'grayromantic',
     locales: [
       { lang: 'es', name: 'Grisoromántico 🖤💚', description: 'Persona que experimenta atracción romántica raramente o con baja intensidad'},
@@ -218,7 +216,7 @@ export const LABELS: Label[] = [
     ]
   },
   {
-    rkey: '3lb4xfk5jv722',
+    rkey: '3lb7gjf5jv722',
     identifier: 'aroflux',
     locales: [
       { lang: 'es', name: 'Aroflux 💚', description: 'Persona cuya atracción romántica fluctúa dentro del espectro arromántico'},
