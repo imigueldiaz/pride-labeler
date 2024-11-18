@@ -1,6 +1,22 @@
 # Pride Labeler for Bluesky
 
-A comprehensive LGBTQIA+ self-labeling service for Bluesky Social, including asexual and aromantic spectrums.
+A comprehensive LGBTQIA+ self-labeling service for Bluesky Social, including sexual orientation, gender identity, asexual and aromantic spectrums.
+
+> Based on [labeler-starter-kit-bsky](https://github.com/aliceisjustplaying/labeler-starter-kit-bsky) by [Alice](https://github.com/aliceisjustplaying)
+
+## 💌 Feedback & Communication
+
+If you have suggestions for new labels or believe any existing labels could be improved, please send a constructive message to [@pride-labels.bsky.social](https://bsky.app/profile/pride-labels.bsky.social). I will do my best to accommodate reasonable requests that enhance inclusivity and representation.
+
+> ![Warning](https://img.shields.io/badge/⚠️_Note-Trolling_and_hate_messages_will_be_ignored-red)
+> Let's keep this space respectful and constructive for everyone.
+
+## 🌍 Supported Languages
+- 🇪🇸 Spanish (es)
+- 🇬🇧 English (en)
+- 🇩🇪 German (de)
+- 🇫🇷 French (fr)
+- 🇯🇵 Japanese (ja)
 
 ## 🌈 Available Labels
 
@@ -11,9 +27,10 @@ A comprehensive LGBTQIA+ self-labeling service for Bluesky Social, including ase
 - Pansexual 💗💛💙
 
 ### Gender Identities
-- Trans 🏳️‍⚧️
+- Transgender 🏳️‍⚧️
 - Non-Binary 🏳️‍⚧️
 - Agender 🏳️‍⚧️
+- Queer 🏳️‍🌈
 - Intersex ⚧
 
 ### Asexual Spectrum
@@ -22,8 +39,11 @@ A comprehensive LGBTQIA+ self-labeling service for Bluesky Social, including ase
 - Graysexual 🖤
 - Aceflux 💜
 
-### Aromantic Spectrum
+### Romantic Orientations
 - Aromantic 💚🤍🖤
+- Heteroromantic 💗
+- Biromantic 💗💜💙
+- Homoromantic 🏳️‍🌈
 - Demiromantic 💚
 - Grayromantic 🖤💚
 - Aroflux 💚
@@ -34,6 +54,14 @@ A comprehensive LGBTQIA+ self-labeling service for Bluesky Social, including ase
 2. Find the post with the label you want to use
 3. Like the post to apply the label to your profile
 4. To remove all labels, like the DELETE post
+
+## 🌟 Features
+
+- Multi-language support for all labels
+- Inclusive and respectful terminology
+- Comprehensive coverage of gender, sexual, and romantic identities
+- Easy to use like-based system
+- Safe and respectful label removal
 
 ## 💻 Development
 
@@ -53,35 +81,34 @@ cd pride-labeler
 npm install
 ```
 
-3. Create .env file
-```env
-DID=your_did
-SIGNING_KEY=your_signing_key
-BSKY_IDENTIFIER=your_identifier
-BSKY_PASSWORD=your_password
-PORT=4100
-METRICS_PORT=4102
-FIREHOSE_URL=wss://jetstream1.us-east.bsky.network/subscribe
-CURSOR_UPDATE_INTERVAL=10000
-```
-
-4. Run the server
+3. Configure environment variables
 ```bash
-npm run start
+cp .env.example .env
+# Edit .env with your Bluesky credentials
 ```
 
-## 🌟 Features
-- Comprehensive LGBTQIA+ identity labels
-- Full asexual and aromantic spectrum support
-- Bilingual support (English/Spanish)
-- No limit on number of labels per user
-- Easy self-service label application
-
-## 📝 License
-MIT
+4. Build and run
+```bash
+npm run build
+npm start
+```
 
 ## 🤝 Contributing
-Contributions, issues, and feature requests are welcome! Feel free to check the issues page.
 
-## 💖 Credits
-Based on the [Bluesky Labeler Starter Kit](https://github.com/ORIGINAL_REPO)
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
+
+Areas we're particularly interested in:
+- Additional language translations
+- New identity labels
+- Improved descriptions
+- Bug fixes and performance improvements
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- The LGBTQIA+ community for guidance on terminology and inclusivity
+- Our translators and contributors
+- The Bluesky team for their platform and support
