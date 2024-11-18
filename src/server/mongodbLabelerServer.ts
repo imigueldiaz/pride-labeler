@@ -6,6 +6,7 @@ import { LABELS } from '../constants.js';
 
 export class MongoDBLabelerServer extends LabelerServer {
     private labelService: LabelService;
+    private nextId: number = 0;
 
     constructor(options: { did: string; signingKey: string }) {
         super(options);
@@ -15,6 +16,33 @@ export class MongoDBLabelerServer extends LabelerServer {
         this.queryLabelsHandler = this.handleQueryLabels.bind(this);
 
         logger.info('MongoDBLabelerServer initialized');
+        
+        // Inicializar el nextId con el máximo ID actual + 1
+        this.initializeNextId().catch(error => {
+            logger.error('Error initializing nextId:', error instanceof Error ? error.stack : error);
+        });
+    }
+
+    /**
+     * Inicializa el nextId basado en el máximo ID actual en la base de datos
+     */
+    private async initializeNextId(): Promise<void> {
+        try {
+            const labelsWithMetadata = await this.labelService.getAllLabelsWithMetadata();
+            const maxId = labelsWithMetadata.reduce((max, label) => Math.max(max, label.id || 0), 0);
+            this.nextId = maxId + 1;
+            logger.info(`Initialized nextId to ${this.nextId}`);
+        } catch (error) {
+            logger.error('Error getting max id:', error instanceof Error ? error.stack : error);
+            this.nextId = 0;
+        }
+    }
+
+    /**
+     * Obtiene y incrementa el siguiente ID disponible
+     */
+    private getNextId(): number {
+        return this.nextId++;
     }
 
     /**
@@ -29,7 +57,7 @@ export class MongoDBLabelerServer extends LabelerServer {
                 neg: label.neg || false,
                 cts: new Date().toISOString(),
                 sig: new Uint8Array(),
-                id: Date.now()
+                id: this.getNextId()
             };
 
             // Crear el documento en MongoDB
@@ -132,15 +160,15 @@ export class MongoDBLabelerServer extends LabelerServer {
             const labelsWithMetadata = await this.labelService.getAllLabelsWithMetadata();
             logger.info('Labels with metadata:', JSON.stringify(labelsWithMetadata, null, 2));
 
-            // Convertir al formato SavedLabel
-            const labels: SavedLabel[] = labelsWithMetadata.map(label => ({
+            // Convertir al formato SavedLabel y asignar IDs secuenciales
+            const labels: SavedLabel[] = labelsWithMetadata.map((label, index) => ({
                 src: label.src as `did:${string}`,
                 uri: label.uri,
                 val: label.val,
                 neg: label.neg,
                 cts: new Date(label.cts).toISOString(),
                 sig: Buffer.isBuffer(label.sig) ? new Uint8Array(label.sig) : new Uint8Array(),
-                id: label.id
+                id: label.id || this.getNextId()
             }));
 
             logger.info('Transformed labels:', JSON.stringify(labels, null, 2));
