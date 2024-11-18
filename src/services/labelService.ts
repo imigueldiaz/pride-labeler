@@ -39,8 +39,8 @@ export class LabelService {
     async createLabelDocuments(uri: string, labels: Set<string>): Promise<void> {
         try {
             const client = await this.getClient();
-            const db = client.db('pride-labeler01');
-            const collection = db.collection('test.labels');
+            const db = client.db('test');
+            const collection = db.collection('labels');
 
             const documents = Array.from(labels).map(label => ({
                 uri,
@@ -65,8 +65,8 @@ export class LabelService {
     async createNegationDocuments(uri: string, labels: Set<string>): Promise<void> {
         try {
             const client = await this.getClient();
-            const db = client.db('pride-labeler01');
-            const collection = db.collection('test.labels');
+            const db = client.db('test');
+            const collection = db.collection('labels');
 
             const documents = Array.from(labels).map(label => ({
                 uri,
@@ -84,36 +84,41 @@ export class LabelService {
     }
 
     /**
-     * Obtiene las etiquetas actuales para un URI
-     * @param uri URI del post
+     * Obtiene las etiquetas actuales para un URI opcional
+     * @param uri URI del post (opcional)
      * @returns Conjunto de etiquetas
      */
-    async getCurrentLabels(uri: string): Promise<Set<string>> {
+    async getCurrentLabels(uri?: string): Promise<Set<string>> {
         try {
             const client = await this.getClient();
-            const db = client.db('pride-labeler01');
-            const collection = db.collection('test.labels');
+            const db = client.db('test');
+            const collection = db.collection('labels');
 
-            // Obtener las etiquetas más recientes para cada label
-            const pipeline = [
-                { $match: { uri } },
-                { $sort: { createdAt: -1 } },
-                {
-                    $group: {
-                        _id: '$label',
-                        negated: { $first: '$negated' }
-                    }
-                },
-                {
-                    $match: {
-                        negated: false // Solo incluir etiquetas no negadas
-                    }
-                }
+            // Pipeline base
+            const pipeline: any[] = [
+                { $sort: { createdAt: -1 } }
             ];
+
+            // Si se proporciona URI, filtrar por ella
+            if (uri) {
+                pipeline.unshift({ $match: { uri } });
+            }
+
+            pipeline.push({
+                $group: {
+                    _id: '$label',
+                    negated: { $first: '$negated' }
+                }
+            },
+            {
+                $match: {
+                    negated: false // Solo incluir etiquetas no negadas
+                }
+            });
 
             const result = await collection.aggregate(pipeline).toArray();
             const labels = new Set(result.map(doc => doc._id));
-            logger.info(`Retrieved ${labels.size} labels for URI: ${uri}`);
+            logger.info(`Retrieved ${labels.size} labels${uri ? ` for URI: ${uri}` : ''}`);
             return labels;
         } catch (error) {
             logger.error('Error getting current labels:', error);

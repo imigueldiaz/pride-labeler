@@ -44,15 +44,10 @@ export class MongoDBLabelerServer extends LabelerServer {
     private async handleQueryLabels(request: FastifyRequest): Promise<{ cursor: string; labels: ComAtprotoLabelDefs.Label[] }> {
         try {
             const { uri } = request.query as QueryLabelsParams;
-            
-            if (!uri) {
-                throw new Error('URI parameter is required');
-            }
-
             const labels = await this.labelService.getCurrentLabels(uri);
             const labelObjects = Array.from(labels).map(val => ({
                 src: this.did as `did:${string}`,
-                uri: uri,
+                uri: uri || '*',
                 val: val,
                 cts: new Date().toISOString()
             }));
