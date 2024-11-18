@@ -32,16 +32,8 @@ export class MongoDBLabelerServer extends LabelerServer {
         // Deshabilitar SQLite estableciendo db como un objeto vacío
         (this as any).db = {};
 
-        // Registrar el endpoint de queryLabels
-        this.app.get('/xrpc/com.atproto.label.queryLabels', async (request, reply) => {
-            try {
-                const response = await this.handleQueryLabels(request);
-                reply.send(response);
-            } catch (error) {
-                logger.error('Error handling queryLabels:', error);
-                reply.status(500).send({ error: 'Internal Server Error' });
-            }
-        });
+        // Sobrescribir el handler de queryLabels
+        this.queryLabelsHandler = this.handleQueryLabels.bind(this);
     }
 
     /**

@@ -34,8 +34,6 @@ export async function connectDB(): Promise<void> {
 
         // Opciones de conexión recomendadas por MongoDB
         const options = {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             serverSelectionTimeoutMS: 5000, // 5 segundos de timeout
             socketTimeoutMS: 45000, // 45 segundos de timeout
         } as mongoose.ConnectOptions;
