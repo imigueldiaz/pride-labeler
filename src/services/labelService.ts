@@ -1,6 +1,7 @@
 import logger from '../logger.js';
 import mongoose from 'mongoose';
 import { connectDB } from '../db/connection.js';
+import { LABELS } from '../constants.js';
 
 export class LabelService {
     async getDatabase() {
@@ -45,21 +46,22 @@ export class LabelService {
             const count = await collection.countDocuments();
             logger.info(`Found ${count} documents in labels collection`);
 
-            // Mostrar algunos documentos de ejemplo
-            const sampleDocs = await collection.find().limit(3).toArray();
-            logger.info('Sample documents:', JSON.stringify(sampleDocs, null, 2));
-
-            logger.info('Preparing aggregation pipeline...');
-            const pipeline: any[] = [
-                { $sort: { createdAt: -1 } }
-            ];
-
-            if (uri) {
-                logger.info(`Adding URI filter to pipeline: ${uri}`);
-                pipeline.unshift({ $match: { uri } });
+            // Si no hay URI, devolver todas las etiquetas disponibles
+            if (!uri) {
+                logger.info('No URI provided, returning all available labels');
+                const allLabels = new Set(LABELS.map(label => label.identifier));
+                logger.info('Available labels:', Array.from(allLabels));
+                return allLabels;
             }
 
-            pipeline.push(
+            // Mostrar algunos documentos de ejemplo
+            const sampleDocs = await collection.find({ uri }).limit(3).toArray();
+            logger.info('Sample documents for URI:', JSON.stringify(sampleDocs, null, 2));
+
+            logger.info('Preparing aggregation pipeline...');
+            const pipeline = [
+                { $match: { uri } },
+                { $sort: { createdAt: -1 } },
                 {
                     $group: {
                         _id: '$label',
@@ -75,14 +77,14 @@ export class LabelService {
                 {
                     $sort: { createdAt: -1 }
                 }
-            );
+            ];
 
             logger.info('Executing aggregation pipeline:', JSON.stringify(pipeline, null, 2));
             const result = await collection.aggregate(pipeline).toArray();
             logger.info('Raw aggregation results:', JSON.stringify(result, null, 2));
             
-            const labels = new Set(result.map(doc => doc._id));
-            logger.info(`Retrieved ${labels.size} labels${uri ? ` for URI: ${uri}` : ''}`);
+            const labels = new Set(result.map(doc => doc._id).filter(Boolean));
+            logger.info(`Retrieved ${labels.size} labels for URI: ${uri}`);
             logger.info('Labels:', Array.from(labels));
             return labels;
         } catch (error) {

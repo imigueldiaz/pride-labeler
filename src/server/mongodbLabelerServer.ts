@@ -2,6 +2,7 @@ import { LabelerServer, SavedLabel } from '@skyware/labeler';
 import { LabelService } from '../services/labelService.js';
 import { FastifyRequest } from 'fastify';
 import logger from '../logger.js';
+import { LABELS } from '../constants.js';
 
 /**
  * Servidor de etiquetas que utiliza MongoDB como almacenamiento.
@@ -131,16 +132,23 @@ export class MongoDBLabelerServer extends LabelerServer {
             const currentLabels = await this.labelService.getCurrentLabels(uri);
             logger.info('Current labels:', Array.from(currentLabels));
 
-            // Convertir las etiquetas al formato requerido
-            const labels: SavedLabel[] = Array.from(currentLabels).map((label, index) => ({
-                src: this.did as `did:${string}`,
-                uri: uri || '',
-                val: label,
-                neg: false,
-                cts: new Date().toISOString(),
-                sig: new Uint8Array(),
-                id: index
-            }));
+            // Si no hay URI, devolver todas las etiquetas disponibles
+            const labels: SavedLabel[] = Array.from(currentLabels).map((label, index) => {
+                const labelInfo = LABELS.find(l => l.identifier === label);
+                return {
+                    src: this.did as `did:${string}`,
+                    uri: uri || '',
+                    val: label,
+                    neg: false,
+                    cts: new Date().toISOString(),
+                    sig: new Uint8Array(),
+                    id: index,
+                    ...(labelInfo && { 
+                        locales: labelInfo.locales,
+                        rkey: labelInfo.rkey
+                    })
+                };
+            });
 
             logger.info('Transformed labels:', JSON.stringify(labels, null, 2));
 
