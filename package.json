@@ -38,7 +38,7 @@
     "@skyware/jetstream": "^0.2.0",
     "@skyware/labeler": "^0.1.13",
     "dotenv": "^16.4.5",
-    "express": "^4.21.1",
+    "express": "^4.21.2",
     "husky": "^9.1.6",
     "lint-staged": "^15.2.10",
     "mongodb": "^6.10.0",
